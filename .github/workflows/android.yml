@@ -41,7 +41,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.10"
 
       - uses: actions/setup-java@v4
         with:
@@ -57,7 +57,7 @@ jobs:
       - name: Buildozer
         run: |
           python -m pip install --upgrade pip
-          pip install buildozer "cython==0.29.36" setuptools
+          pip install "buildozer==1.5.0" "cython==0.29.36" "setuptools<70"
 
       - name: Cache Android SDK/NDK a buildů
         uses: actions/cache@v4
@@ -65,19 +65,34 @@ jobs:
           path: |
             ~/.buildozer
             .buildozer
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
-          restore-keys: buildozer-${{ runner.os }}-
+          key: buildozer-v2-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: buildozer-v2-${{ runner.os }}-
 
       - name: Verze a podpisový klíč
         run: |
           sed -i "s/^version = .*/version = 1.0.${{ github.run_number }}/" buildozer.spec
-          echo "android.numeric_version = ${{ github.run_number }}" >> buildozer.spec
+          sed -i "/^version = /a android.numeric_version = ${{ github.run_number }}" buildozer.spec
+          grep -n "version" buildozer.spec
           # stálý klíč → nové verze jdou nainstalovat přes staré bez ztráty uložené hry
           mkdir -p ~/.android
           cp app_assets/debug.keystore ~/.android/debug.keystore
 
       - name: Sestavit APK
-        run: yes | buildozer android debug
+        run: |
+          set -o pipefail
+          buildozer android debug < /dev/null 2>&1 | tee build.log
+
+      - name: Uložit log chyby do větve build-log (diagnostika)
+        if: failure()
+        run: |
+          tail -n 600 build.log > build-tail.log 2>/dev/null || echo "build.log chybí" > build-tail.log
+          git config user.name "ci"
+          git config user.email "ci@users.noreply.github.com"
+          git checkout --orphan build-log
+          git rm -rf --cached . > /dev/null
+          git add -f build-tail.log
+          git commit -m "Log neúspěšného buildu ${{ github.run_number }}"
+          git push -f origin build-log
 
       - name: Přejmenovat APK
         run: |

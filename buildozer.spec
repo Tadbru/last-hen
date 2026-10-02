@@ -25,12 +25,16 @@ android.presplash_color = #1C1422
 
 # --- Android ---
 android.permissions = VIBRATE
-android.api = 34
+android.api = 33
 android.minapi = 24
+android.ndk = 25b
 android.archs = arm64-v8a, armeabi-v7a
 android.accept_sdk_license = True
 android.allow_backup = True
 p4a.bootstrap = sdl2
+# Pevná verze python-for-android: Python 3.10 + NDK 25b + numpy 1.22 sedí k receptu pygame 2.1.0.
+# (master od 2026 staví Python 3.14, se kterým se pygame 2.1.0 nezkompiluje.)
+p4a.branch = v2023.05.21
 
 [buildozer]
 log_level = 2
