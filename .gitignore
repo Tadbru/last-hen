@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+save.json
+save.json.*
+crash.log
+shares/*
+!shares/.gitkeep
+screens/
+sprite_sheet.png
+
+# Android build
+.buildozer/
+bin/
+dist/
+*.apk
+*.aab

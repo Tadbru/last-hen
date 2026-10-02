@@ -1,0 +1,103 @@
+# Sestaví Android APK při každém pushnutí do main/master a zveřejní ho na stránce Releases.
+# První build trvá ~40–60 min (stahuje se Android SDK/NDK), další díky cache ~10–20 min.
+name: Android APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tests:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        include:
+          - python: "3.11"        # PC verze
+            pygame: "pygame-ce"
+          - python: "3.10"        # stejná verze pygame jako v Android APK
+            pygame: "pygame==2.1.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Závislosti
+        run: pip install "${{ matrix.pygame }}" "numpy<2"
+      - name: Smoke testy (headless)
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: python tests/smoke_test.py fast
+
+  android:
+    needs: tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Systémové balíčky
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip autoconf automake libtool libltdl-dev pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev build-essential
+
+      - name: Buildozer
+        run: |
+          python -m pip install --upgrade pip
+          pip install buildozer "cython==0.29.36" setuptools
+
+      - name: Cache Android SDK/NDK a buildů
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+          restore-keys: buildozer-${{ runner.os }}-
+
+      - name: Verze a podpisový klíč
+        run: |
+          sed -i "s/^version = .*/version = 1.0.${{ github.run_number }}/" buildozer.spec
+          echo "android.numeric_version = ${{ github.run_number }}" >> buildozer.spec
+          # stálý klíč → nové verze jdou nainstalovat přes staré bez ztráty uložené hry
+          mkdir -p ~/.android
+          cp app_assets/debug.keystore ~/.android/debug.keystore
+
+      - name: Sestavit APK
+        run: yes | buildozer android debug
+
+      - name: Přejmenovat APK
+        run: |
+          mkdir -p dist
+          cp bin/*.apk dist/LastChicken.apk
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LastChicken-apk
+          path: dist/LastChicken.apk
+
+      - name: Vydat na stránce Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Last Chicken 1.0.${{ github.run_number }}
+          make_latest: true
+          files: dist/LastChicken.apk
+          body: |
+            **Instalace na Android:** na telefonu otevři tuto stránku, klepni na `LastChicken.apk`,
+            po stažení ho otevři a povol instalaci z tohoto zdroje (prohlížeč / Soubory).
+            Novější verze se instaluje přes starou – uložená hra zůstane.
