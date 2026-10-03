@@ -10,7 +10,7 @@ from .. import assets
 from ..config import H, PX, W
 from ..device import fblits
 from ..gfx import pixelart as pa
-from ..gfx.particles import blit_add, cream_sprite, gas_sprite, glow_sprite, stink_line_sprite
+from ..gfx.particles import blit_add, cream_sprite, disc_sprite, glow_sprite, stink_line_sprite
 from ..gfx.sprites import angle_index
 from ..gfx.tiles import TILE
 from ..ui.widgets import notched_rect
@@ -346,28 +346,42 @@ class RunRenderer:
             else:
                 self._gas_aura(surf, a, x, y, r)
 
+    def _gas_puffs(self, surf, x, y, rx, ry, n, rmax, cols, al, seed, ring: bool = False) -> None:
+        """Vzdouvající se plyn: chuchvalce se rodí na náhodném místě, nafouknou se, stoupají a zmizí
+        (stejný princip jako kouř výbuchů). Deterministické z času – žádný stav ani alokace."""
+        t = self.t
+        out = []
+        for i in range(n):
+            h0 = (seed * 2654435761 + i * 40503) & 0xFFFFFFFF
+            period = 1.3 + (h0 & 255) / 255 * 1.1
+            u = t / period + ((h0 >> 8) & 255) / 255
+            cyc = int(u)
+            k = u - cyc
+            h = (h0 ^ (cyc * 2246822519)) * 3266489917 & 0xFFFFFFFF
+            ang = (h & 0xFFFF) / 65536 * math.tau
+            d = 0.86 + ((h >> 16) & 0xFF) / 255 * 0.18 if ring else math.sqrt(((h >> 16) & 0xFF) / 255) * 0.8
+            px = x + math.cos(ang) * d * rx
+            py = y + math.sin(ang) * d * ry - k * 10
+            life = math.sin(math.pi * k)
+            a = int(al * min(1.0, life * 2.0)) // 30 * 30
+            if a < 30:
+                continue
+            rc = max(1, int(rmax * (0.5 + 0.5 * life) * (0.7 + ((h >> 24) & 3) * 0.12) / 3))
+            out.append((py, disc_sprite(rc, cols[(h >> 26) % len(cols)], a), px))
+        out.sort(key=lambda o: o[0])
+        fblits(surf, [(img, (int(px) // 3 * 3 - img.get_width() // 2, int(py) // 3 * 3 - img.get_height() // 2))
+                      for py, img, px in out])
+
     def _gas_cloud(self, surf, a, x, y, r, fade) -> None:
-        """Mrak smradu: 7 pixelových chuchvalců plynu, které se pomalu točí a „dýchají“, a stoupající bubliny."""
+        """Mrak smradu: oblak z mnoha menších vzdouvajících se chuchvalců (pod entitami)."""
         fade *= min(1.0, (a.maxlife - a.life) / 0.25)
-        al = int(120 * fade) // 30 * 30
+        al = int(170 * fade)
         if al < 30:
             return
         col = a.color
-        col2 = mul_color(col, 0.82)
-        seed = (int(a.x * 0.37) ^ int(a.y * 0.11)) % 97
-        rc = max(2, int(r * 0.42 / 3))
-        lobes = [(x, y, rc + 1, col2)]
-        for i in range(6):
-            ang = self.t * 0.35 + i * math.tau / 6 + seed
-            rr = r * 0.46 * (1 + 0.08 * math.sin(self.t * 2.1 + i * 1.7))
-            lobes.append((x + math.cos(ang) * rr, y + math.sin(ang) * rr * 0.72, rc, col if i & 1 else col2))
-        lobes.sort(key=lambda o: o[1])
-        seq = []
-        for lx, ly, lr, lc in lobes:
-            g = gas_sprite(lr, lc, al)
-            hw = g.get_width() // 2
-            seq.append((g, (int(lx) // 3 * 3 - hw, int(ly) // 3 * 3 - hw)))
-        fblits(surf, seq)
+        cols = (col, mul_color(col, 0.84), mul_color(col, 0.7), lerp_color(col, (230, 255, 150), 0.3))
+        seed = (int(a.x * 0.37) ^ int(a.y * 0.11)) & 0xFFFF
+        self._gas_puffs(surf, x, y, r * 0.95, r * 0.7, max(10, int(r / 6)), r * 0.42, cols, al, seed)
 
     def _gas_air(self, surf, a, x, y, r, fade) -> None:
         """Nad entitami: bubliny a komiksové smradlavé čárky (lišky v mraku zůstávají vidět)."""
@@ -411,19 +425,10 @@ class RunRenderer:
         fblits(surf, seq)
 
     def _gas_aura(self, surf, a, x, y, r) -> None:
-        """Aura Biologické zbraně: toxický prstenec z malých chuchvalců kolem slepice (žádná plná skvrna)."""
-        col = mul_color(a.color, 0.72)
-        col2 = mul_color(a.color, 0.55)
-        n = max(16, int(r / 7))
-        seq = []
-        for i in range(n):
-            ang = self.t * 0.4 + i * math.tau / n
-            wob = 1 + 0.06 * math.sin(self.t * 3 + i * 1.3)
-            g = gas_sprite(2 + (i % 3 == 0), col if i & 1 else col2, 180)
-            hw = g.get_width() // 2
-            seq.append((g, (int(x + math.cos(ang) * r * wob) // 3 * 3 - hw,
-                            int(y + math.sin(ang) * r * wob * 0.8) // 3 * 3 - hw)))
-        fblits(surf, seq)
+        """Aura Biologické zbraně: prstenec vzdouvajícího se toxického plynu kolem slepice."""
+        col = a.color
+        cols = (mul_color(col, 0.7), mul_color(col, 0.58), mul_color(col, 0.82))
+        self._gas_puffs(surf, x, y, r, r * 0.8, max(18, int(r / 6)), 22, cols, 160, 7, ring=True)
 
     def _pickups(self, surf, ox, oy) -> None:
         sm = assets.sprites.small

@@ -38,6 +38,12 @@ Screenshoty: před `polish/before/`, po `polish/after/` (stejná sada a stejný 
 - **Menu**: nová krajina v art pixelech: obloha s ditherem, vzdálené kopce se smrky, kopec s kurníkem, strašákem a stodolou, louka bez předělu s trsy trávy a kytkami, plot a balíky sena. Feature graphic do obchodu používá stejnou krajinu.
 - Snímky: `polish/after/menu.png`, `polish/after_weapons/` (dort a smrad v pozdní hře).
 
+### Kolo 3 (podle zpětné vazby)
+- **Menu**: dýně stojí u plotu a lišky chodí před nimi. Stavby mají opar, stín a trávu přes spodek, takže sedí v krajině. Kurník je bez rampy (jen v menu). Spodní část louky plynule tmavne do klidné barvy a dole ji rámuje vysoká tráva.
+- **Výběr zvířete**: obsah panelu je posunutý, takže text má vždy rezervu. Tečky stránek jsou pixelové kuličky s obrysem.
+- **Země ve hře**: dlaždice bez švů (skvrny se neořezávají na hraně, cesta a výstražný pruh nahrazené uzavřenými motivy).
+- **Smrad**: vzdouvající se oblak z mnoha chuchvalců jako kouř výbuchů. Aura je prstenec stejného plynu.
+
 ## Zjištění z kódu, která stojí za pozornost
 - **Hra už byla vizuálně soudržná.** Pixel art, vlastní bitmapový font s diakritikou, stíny, y-sorting, omezený třes (trauma model), omezovač záblesků a nastavení přístupnosti tu byly. Rozšiřoval jsem existující systémy, nic paralelního nevzniklo.
 - **`Run.rng` je herní RNG** (deterministické denní výzvy). Všechen nový vizuální kód používá vlastní RNG částic, ambientu nebo menu. Pozor ale na **existující únik**: `damage_enemy` bere `run.rng` na posun čísla poškození jen když hra není headless. Headless simulace a skutečná hra se stejným seedem se proto rozejdou. Nebyl to úkol této práce, nechal jsem to být.

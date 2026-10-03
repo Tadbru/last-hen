@@ -49,3 +49,13 @@
 - Stink: pixel gas cloud of 7 slowly rotating, breathing lobes (dark rim, dithered fill) under entities. Above entities: bubbles + comic stink lines (bright, with a shadow). The Bioweapon aura = a ring of darker gas lobes instead of a translucent green disc.
 - Menu foxes: the walk frame was changing with every pixel moved (frame index used the x position) → now time-based at about 3–4 steps/s.
 - Menu landscape redrawn at 180×320 art px: dithered sky, far hills with pine silhouettes, a middle hill with the coop, scarecrow and barn (night-tinted game sprites), and a meadow running continuously to the bottom with grass tufts, flowers and blades breaking the edge. No seam. Plus the game's fence and hay bales. The store feature graphic now uses the same landscape.
+
+## Round 3 (user feedback)
+- Menu foxes walked across the pumpkins → pumpkins now stand by the fence (night-tinted) and foxes walk only in a lane in front of them (y 502–540, same number of `random` calls as before).
+- Barns looked "pasted on" → buildings get aerial perspective (mixed ~30 % toward the haze colour), a contact shadow and pixel grass tufts over the bottom edge, and are sunk into the slope. Fence, hay and bushes get a lighter haze.
+- The stick in front of the left building (the coop ramp) → `SpriteBank._coop(ramp=False)` used only in the menu; the in-game coop is unchanged.
+- Bottom half of the menu: the meadow fades through dithered bands into a calm dark colour behind the buttons. Grass tufts only in the upper meadow, fewer random specks, plus a dark tall-grass fringe along the bottom edge as a frame.
+- Character select: the panel content was moved up (sprite, name, weapon) so even 2-line passives + weakness keep a 20 px margin. Checked on all 7 animals, unlocked and locked.
+- Page dots: pixel-art balls from the same generator as the sprites (`pa.build`: outline + light from the top) on the 2 px font grid. Selected 5×5, others 4×4, instead of `pygame.draw.circle`.
+- Ground tiles: spots no longer wrap around the tile edge (they were cut off at seams with a different variant). The farm "road" strip and the factory hazard stripe ended abruptly at tile edges → replaced by contained motifs (irregular trodden dirt, a hazard plate inside one panel).
+- Stink: the cloud was 7 lobes with dark rims = "circles on top of each other" → now billowing smoke like the explosions: many smaller puffs (shaded discs without a rim) that are born, swell, rise and fade, deterministic from time. The aura is the same puffs in a ring band.

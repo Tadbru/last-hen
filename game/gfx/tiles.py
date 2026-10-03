@@ -19,40 +19,46 @@ def _px(s: pygame.Surface, x: int, y: int, c) -> None:
 
 
 def ground_tiles(biome) -> list[pygame.Surface]:
+    """Tři varianty dlaždice. Vedle sebe se střídají náhodně, proto žádný motiv nesmí přesahovat okraj
+    dlaždice (dřív se skvrny „zalamovaly“ na protější stranu a na švu s jinou variantou byly useknuté)."""
     out = []
+    edge = 2
     for variant in range(3):
         rng = random.Random(f"{biome.id}-{variant}")
         s = pygame.Surface((TILE_ART, TILE_ART))
         s.fill(biome.ground)
-        # skvrny
+        # skvrny – celé uvnitř dlaždice
         for _ in range(7):
-            cx, cy = rng.randrange(TILE_ART), rng.randrange(TILE_ART)
             r = rng.randint(4, 11)
+            cx = rng.randrange(r + edge, TILE_ART - r - edge)
+            cy = rng.randrange(r + edge, TILE_ART - r - edge)
             for dx in range(-r, r + 1):
                 for dy in range(-r, r + 1):
                     if dx * dx + dy * dy <= r * r and rng.random() < 0.85:
-                        _px(s, (cx + dx) % TILE_ART, (cy + dy) % TILE_ART, biome.ground2)
+                        _px(s, cx + dx, cy + dy, biome.ground2)
         bid = biome.id
         if bid in ("farm", "forest"):
             for _ in range(70 if bid == "farm" else 50):
-                x, y = rng.randrange(TILE_ART), rng.randrange(TILE_ART)
+                x, y = rng.randrange(1, TILE_ART - 2), rng.randrange(3, TILE_ART - 1)
                 c = biome.detail if rng.random() < 0.7 else mul_color(biome.ground, 0.8)
                 _px(s, x, y, c)
-                _px(s, x, (y - 1) % TILE_ART, c)
+                _px(s, x, y - 1, c)
                 if rng.random() < 0.5:
-                    _px(s, (x + 1) % TILE_ART, (y - 2) % TILE_ART, c)
+                    _px(s, x + 1, y - 2, c)
             if bid == "farm" and variant == 2:
-                # vyjetá cesta
-                for x in range(TILE_ART):
-                    for y in range(26, 38):
-                        if rng.random() < 0.9:
-                            _px(s, x, y, (168, 130, 84) if rng.random() < 0.8 else (150, 112, 70))
+                # vyšlapaná hlína – nepravidelná plocha uvnitř dlaždice (dřív pruh cesty, který končil na švu)
+                cx, cy = 32, 34
+                for x in range(10, 54):
+                    for y in range(20, 48):
+                        d = ((x - cx) / 21.0) ** 2 + ((y - cy) / 12.0) ** 2
+                        if d < 1.0 - rng.random() * 0.25:
+                            _px(s, x, y, (150, 116, 74) if rng.random() < 0.8 else (132, 100, 64))
             if bid == "forest":
                 for _ in range(25):
                     x, y = rng.randrange(TILE_ART), rng.randrange(TILE_ART)
                     c = rng.choice([(120, 84, 40), (150, 100, 40), (90, 70, 40)])
                     _px(s, x, y, c)
-                    _px(s, x + 1, y, c)
+                    _px(s, min(TILE_ART - 1, x + 1), y, c)
         elif bid == "city":
             side = (128, 128, 138)
             for x in range(TILE_ART):
@@ -85,9 +91,13 @@ def ground_tiles(biome) -> list[pygame.Surface]:
                     for (rx, ry) in ((3, 3), (plate - 4, 3), (3, plate - 4), (plate - 4, plate - 4)):
                         _px(s, px0 + rx, py0 + ry, mul_color(biome.ground, 1.3))
             if variant == 1:
-                for x in range(TILE_ART):
-                    for y in range(28, 36):
-                        _px(s, x, y, (230, 190, 40) if ((x + y) // 4) % 2 else (40, 36, 40))
+                # výstražná deska uvnitř jednoho plátu (dřív pruh přes celou dlaždici, useknutý na švu)
+                for x in range(36, 60):
+                    for y in range(36, 60):
+                        if x in (36, 59) or y in (36, 59):
+                            _px(s, x, y, (40, 36, 40))
+                        else:
+                            _px(s, x, y, (230, 190, 40) if ((x + y) // 4) % 2 else (40, 36, 40))
             if variant == 2:
                 for x in range(20, 44):
                     for y in range(20, 44):

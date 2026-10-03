@@ -40,7 +40,7 @@ class MenuScene(Scene):
                                 icon=icon, style="secondary"))
             if label == "Denní" and self.save["daily"].get("last_played") != progression.today().isoformat():
                 b.badge = "!"
-        self.foxes = [[random.uniform(-200, W), random.uniform(470, 540), random.uniform(30, 60)] for _ in range(5)]
+        self.foxes = [[random.uniform(-200, W), random.uniform(502, 540), random.uniform(30, 60)] for _ in range(5)]
         self.season = progression.season_for(None, self.save.settings.get("season", "auto"))
         self.stars = [(random.randrange(W), random.randrange(420), random.random()) for _ in range(60)]
         # třpytky na logu (vlastní RNG – globální random stream zůstává jako dřív)
@@ -137,7 +137,7 @@ class MenuScene(Scene):
             f[0] += f[2] * dt
             if f[0] > W + 60:
                 f[0] = -80
-                f[1] = random.uniform(470, 540)
+                f[1] = random.uniform(502, 540)
         # občasný třpyt na logu
         self._twinkle -= dt
         if self._twinkle <= 0:
@@ -158,15 +158,16 @@ class MenuScene(Scene):
         # měsíc se září
         blit_add(surf, [(glow_sprite(16, (90, 84, 60), 0.9 + 0.1 * math.sin(self.t * 1.5)), (430 - 49, 80 - 49))])
         surf.blit(_moon(), (430 - 36, 80 - 36))
+        if self.season:
+            # sezónní dekorace stojí u plotu – lišky chodí před nimi, nikdy přes ně
+            deco = _night_deco(SEASONS[self.season]["decor"])
+            for x in (34, 150, 392, 506):
+                surf.blit(deco, deco.get_rect(midbottom=(x, _MEADOW[x // 3] * 3 + 34)))
         a = assets.sprites.enemies["fox"]
         for i, f in enumerate(self.foxes):
             # krok podle rychlosti chůze (dřív se snímek měnil s každým posunutým pixelem)
             img = a.frames[0][int(self.t * (2.0 + f[2] * 0.04) + i * 0.37) % 2]
             surf.blit(img, (int(f[0]), int(f[1])))
-        if self.season:
-            deco = assets.sprites.decor[SEASONS[self.season]["decor"]]
-            for i, x in enumerate((30, 120, 420, 480)):
-                surf.blit(deco, (x, 520 + (i % 2) * 14))
         # logo
         bounce = math.sin(self.t * 2.2) * 6
         wob = 1 if self.tap_t > 0 and int(self.t * 30) % 2 else 0
@@ -191,6 +192,7 @@ class MenuScene(Scene):
 
 
 _BACKDROP: list = []
+_MEADOW: list = [154] * (W // 3)       # hrana louky v art px (pro umístění dekorací)
 
 
 def _menu_backdrop() -> pygame.Surface:
@@ -245,16 +247,17 @@ def _menu_backdrop() -> pygame.Surface:
     mid = ridge(139, 6, 0.028, 2.4, 3, 0.09, 0.3)
     fill_below(mid, (30, 50, 54), (56, 86, 72), (40, 64, 62))
     meadow = ridge(154, 3, 0.045, 0.7, 2, 0.12, 1.1)
-    # louka: od hrany dolů tmavne po ditherovaných pásech
+    _MEADOW[:] = meadow
+    # louka: od osvětlené hrany plynule (ditherované pásy) do klidné tmavé barvy za tlačítky
+    cols = [(54, 92, 60), (48, 84, 56), (42, 74, 52), (36, 64, 48), (31, 55, 44), (27, 47, 41), (24, 40, 38),
+            (22, 35, 36)]
     for y in range(min(meadow), ah):
         for x in range(aw):
             if y < meadow[x]:
                 continue
-            d = y - meadow[x]
-            f = min(5.0, d / 34 * 5)
+            f = min(len(cols) - 1.0, (y - meadow[x]) / 26.0)
             i = int(f)
-            cols = [(54, 92, 60), (48, 84, 56), (42, 74, 50), (36, 64, 46), (30, 54, 40), (26, 46, 36)]
-            c = cols[min(5, i + 1)] if f - i > 0.75 and (x + y) & 1 else cols[min(5, i)]
+            c = cols[min(len(cols) - 1, i + 1)] if f - i > 0.7 and (x + y) & 1 else cols[i]
             low.set_at((x, y), c)
     for x in range(aw):
         low.set_at((x, meadow[x]), (86, 128, 84))          # měsíční světlo na hraně louky
@@ -262,48 +265,81 @@ def _menu_backdrop() -> pygame.Surface:
             low.set_at((x, meadow[x] - 1), (54, 92, 60))
             if rng.random() < 0.3:
                 low.set_at((x, meadow[x] - 2), (54, 92, 60))
-    # trsy trávy a kytky
-    for _ in range(420):
-        x = rng.randrange(aw)
-        y = rng.randrange(meadow[x] + 3, ah)
-        d = (y - meadow[x]) / (ah - meadow[x])
-        if rng.random() < 0.5:
-            c = (70, 112, 70) if d < 0.5 else (52, 86, 58)
-            low.set_at((x, y), c)
-            low.set_at((x, y - 1), c)
-            if x + 1 < aw and rng.random() < 0.5:
-                low.set_at((x + 1, y), c)
-        else:
-            low.set_at((x, y), (22, 40, 30))
-    for _ in range(26):
+    # trsy trávy jen v horní části louky (dál od hrany řídnou), pár kytek
+    for _ in range(260):
         x = rng.randrange(1, aw - 1)
-        y = rng.randrange(meadow[x] + 4, meadow[x] + 70)
-        if y < ah:
-            low.set_at((x, y), rng.choice(((214, 214, 240), (240, 220, 140), (190, 170, 230))))
-            low.set_at((x, y + 1), (30, 56, 40))
+        d = rng.random() ** 1.8 * 60
+        y = int(meadow[x] + 4 + d)
+        light = cols[max(0, int(d / 26) - 1)] if d > 26 else (74, 116, 72)
+        dark = cols[min(len(cols) - 1, int(d / 26) + 2)]
+        low.set_at((x, y), light)
+        low.set_at((x, y - 1), light)
+        if rng.random() < 0.5:
+            low.set_at((x + 1, y - 2) if rng.random() < 0.5 else (x - 1, y - 2), light)
+        low.set_at((x, y + 1), dark)
+    for _ in range(18):
+        x = rng.randrange(1, aw - 1)
+        y = meadow[x] + rng.randrange(5, 40)
+        low.set_at((x, y), rng.choice(((214, 214, 240), (240, 220, 140), (190, 170, 230))))
+        low.set_at((x, y + 1), (30, 56, 40))
+    # rám: tmavá vysoká tráva u spodního okraje
+    for x in range(aw):
+        hgt = int(5 + 4 * math.sin(x * 0.31) + 3 * math.sin(x * 0.83 + 1) + rng.randint(0, 3))
+        for y in range(ah - hgt, ah):
+            low.set_at((x, y), (14, 24, 24) if (y - (ah - hgt)) > 0 or x & 1 else (18, 30, 28))
     s = pygame.transform.scale(low, (W, H))
 
-    night = (120, 124, 176)
     sb = assets.sprites
 
-    def put(img, cx, bottom, tint=night):
+    def put(img, cx, bottom, tint=(120, 124, 176), haze=(48, 58, 90), k=0.0, base=None):
+        """Sprite v nočních barvách: tónování + „vzdušná perspektiva“ (míchání k barvě oparu)
+        a volitelně stín a trsy trávy přes spodní hranu, aby stavba stála v krajině, ne na ní."""
         im = pa.tint(img, tint)
-        s.blit(im, im.get_rect(midbottom=(cx, bottom)))
+        if k > 0:
+            m = int(255 * (1 - k))
+            im.fill((m, m, m), special_flags=pygame.BLEND_RGB_MULT)
+            im.fill((int(haze[0] * k), int(haze[1] * k), int(haze[2] * k)), special_flags=pygame.BLEND_RGB_ADD)
+        r = im.get_rect(midbottom=(cx, bottom))
+        if base is not None:
+            sh = pa.make_shadow(int(r.w * 1.15) // 3 * 3, 12, 110)
+            s.blit(sh, sh.get_rect(center=(cx, bottom - 3)))
+        s.blit(im, r)
+        if base is not None:
+            fill, rim = base
+            for x in range(r.x - 6, r.right + 6, 3):
+                h = rng.choice((3, 3, 6, 6, 9))
+                s.fill(fill, (x, bottom - h, 3, h + 3))
+                if rng.random() < 0.6:
+                    s.fill(rim, (x, bottom - h - 3, 3, 3))
 
-    # na prostředním kopci: kurník, strašák, stodola (spodek trochu zapuštěný do svahu)
-    put(sb.misc["coop"], 70, mid[70 // 3] * 3 + 14, (100, 104, 150))
-    put(sb.decor["scarecrow"], 160, mid[160 // 3] * 3 + 8, (100, 104, 150))
-    put(sb.misc["barn"], 412, mid[412 // 3] * 3 + 22, (100, 104, 150))
+    hill = ((30, 50, 54), (50, 80, 68))
+    # na prostředním kopci: kurník (bez rampy), strašák, stodola – zapuštěné do svahu, s oparem
+    put(sb._coop(ramp=False), 70, mid[70 // 3] * 3 + 12, (100, 104, 150), k=0.3, base=hill)
+    put(sb.decor["scarecrow"], 160, mid[160 // 3] * 3 + 6, (100, 104, 150), k=0.3, base=hill)
+    put(sb.misc["barn"], 412, mid[412 // 3] * 3 + 18, (100, 104, 150), k=0.28, base=hill)
     # plot na hraně louky (mezera za slepicí) a balíky sena
     fence = sb.decor["fence_h"]
+    meadow_base = ((40, 70, 50), (60, 98, 64))
     for x in list(range(-6, 190, 48)) + list(range(354, W + 30, 48)):
-        put(fence, x + 24, meadow[max(0, min(aw - 1, (x + 24) // 3))] * 3 + 20)
-    put(sb.decor["haybale"], 448, 520)
-    put(sb.decor["haybale"], 92, 516)
-    put(sb.decor["bush"], 20, 506, (110, 116, 165))
-    put(sb.decor["bush"], 516, 504, (110, 116, 165))
+        put(fence, x + 24, meadow[max(0, min(aw - 1, (x + 24) // 3))] * 3 + 20, k=0.12)
+    put(sb.decor["haybale"], 448, 522, k=0.1, base=meadow_base)
+    put(sb.decor["haybale"], 92, 518, k=0.1, base=meadow_base)
+    put(sb.decor["bush"], 20, 508, (110, 116, 165), k=0.1)
+    put(sb.decor["bush"], 516, 506, (110, 116, 165), k=0.1)
     _BACKDROP.append(s)
     return s
+
+
+def _night_deco(name: str) -> pygame.Surface:
+    """Sezónní dekorace ztlumená do nočních barev (jinak by svítila jako nalepená)."""
+    key = "deco:" + name
+    img = _DECO.get(key)
+    if img is None:
+        img = _DECO[key] = pa.tint(assets.sprites.decor[name], (190, 186, 220))
+    return img
+
+
+_DECO: dict = {}
 
 
 def _moon() -> pygame.Surface:

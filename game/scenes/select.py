@@ -176,17 +176,17 @@ class SelectScene(Scene):
         if not un:
             img = pa.silhouette(img, (20, 14, 26))
         hop = abs(math.sin(self.t * 3)) * 8 if un else 0
-        surf.blit(pa.make_shadow(70, 16, 90), (r.centerx - 35, r.y + 118))
-        surf.blit(img, img.get_rect(midbottom=(r.centerx, r.y + 128 - hop)))
+        surf.blit(pa.make_shadow(70, 16, 90), (r.centerx - 35, r.y + 106))
+        surf.blit(img, img.get_rect(midbottom=(r.centerx, r.y + 116 - hop)))
         if not un:
             lk = assets.icons.get("lock", 5)
-            surf.blit(lk, lk.get_rect(center=(r.centerx + 70, r.y + 70)))
-        font.draw(surf, c.name if un else "???", (r.centerx, r.y + 134), c.color if un else C_TEXT, 3, "midtop",
+            surf.blit(lk, lk.get_rect(center=(r.centerx + 70, r.y + 60)))
+        font.draw(surf, c.name if un else "???", (r.centerx, r.y + 122), c.color if un else C_TEXT, 3, "midtop",
                   outline=C_OUTLINE)
         if un or c.unlock != "secret":
             tw = r.w - 24
             w = WEAPONS[c.weapon]
-            y = r.y + 176
+            y = r.y + 162
             draw_icon_frame(surf, (r.x + 12, y, 40, 40), w.icon, scale=3, gray=not un)
             font.draw(surf, font.fit(w.name, tw - 52, 2), (r.x + 60, y + 9), (255, 230, 180), 2, "topleft",
                       outline=C_OUTLINE)
@@ -199,8 +199,9 @@ class SelectScene(Scene):
         # tečky postav – nad tlačítkem Koupit (B-42)
         for i, cid in enumerate(CHAR_ORDER):
             x = W // 2 + (i - 3) * 26
-            col = (255, 214, 70) if i == self.ci else (130, 120, 140) if self.unlocked(cid) else (66, 56, 72)
-            pygame.draw.circle(surf, col, (x, 424), 7 if i == self.ci else 5)
+            kind = "sel" if i == self.ci else "on" if self.unlocked(cid) else "off"
+            dot = _page_dot(kind)
+            surf.blit(dot, dot.get_rect(center=(x, 424)))
         if not un:
             if c.unlock != "eggs":
                 for j, ln in enumerate(font.wrap(c.unlock_text, W - 2 * M, 2)[:2]):
@@ -237,3 +238,17 @@ class SelectScene(Scene):
 def section(surf, text: str, y: int) -> None:
     """Nadpis sekce – jednotně u všech skupin (B-35)."""
     assets.font.draw(surf, text, (M, y), (255, 230, 150), 2, "topleft", outline=C_OUTLINE)
+
+
+_DOTS: dict = {}
+
+
+def _page_dot(kind: str) -> pygame.Surface:
+    """Tečka stránkování jako pixel-art kulička (stejný generátor jako sprity: obrys + světlo shora)."""
+    img = _DOTS.get(kind)
+    if img is None:
+        rows = [".xxx.", "xxxxx", "xxxxx", "xxxxx", ".xxx."] if kind == "sel" else [".xx.", "xxxx", "xxxx", ".xx."]
+        col = {"sel": (255, 214, 70), "on": (150, 140, 162), "off": (74, 64, 82)}[kind]
+        # mřížka 2 px jako bitmapový font UI
+        img = _DOTS[kind] = pa.scale(pa.build(rows, {"x": col}, outline=C_OUTLINE), 2)
+    return img
