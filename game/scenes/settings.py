@@ -5,7 +5,7 @@ import pygame
 
 from .. import assets, device
 from ..config import C_OUTLINE, C_TEXT, W
-from ..ui.widgets import Button, draw_bar, draw_panel
+from ..ui.widgets import Button, draw_bar, draw_panel, draw_title_bar, MARGIN
 from .base import Dialog, Scene
 
 SEASON_OPTS = [("auto", "Podle data"), ("off", "Vypnuto"), ("halloween", "Halloween"), ("christmas", "Vánoce"),
@@ -15,7 +15,7 @@ SEASON_OPTS = [("auto", "Podle data"), ("off", "Vypnuto"), ("halloween", "Hallow
 class SettingsScene(Scene):
     def __init__(self, app) -> None:
         super().__init__(app)
-        self.add(Button((10, 10, 70, 64), "", self.back, icon="back", style="dark"))
+        self.add(Button((MARGIN, 10, 64, 64), "", self.back, icon="back", style="dark"))
         st = self.save.settings
         y = 130
         self.vol_rows = []
@@ -90,7 +90,7 @@ class SettingsScene(Scene):
     def draw(self, surf) -> None:
         font = assets.font
         surf.fill((34, 32, 42))
-        font.draw(surf, "NASTAVENÍ", (W // 2, 18), (255, 220, 150), 5, "midtop", outline=C_OUTLINE)
+        draw_title_bar(surf, "NASTAVENÍ")
         st = self.save.settings
         for key, label, y in self.vol_rows:
             draw_panel(surf, (16, y - 6, W - 32, 76), (52, 46, 62), shadow=False)
@@ -101,8 +101,8 @@ class SettingsScene(Scene):
             font.draw(surf, label, (34, y + 29), C_TEXT, 2, "midleft")
         font.draw(surf, "Sezónní téma", (34, self.season_y + 29), C_TEXT, 2, "midleft")
         tip = ("Tlačítko Zpět = pauza / návrat" if device.MOBILE
-               else "F3 debug · F11 celá obrazovka · mezerník = kokrhání")
-        font.draw(surf, tip, (W // 2, 930), (150, 140, 160), 1, "midtop")
+               else "Mezerník = kokrhání · F11 = celá obrazovka")
+        font.draw(surf, tip, (W // 2, 926), (170, 160, 180), 2, "midtop")
         _ = pygame
         self.draw_buttons(surf)
         self.draw_overlays(surf)

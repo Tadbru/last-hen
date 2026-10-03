@@ -10,7 +10,7 @@ from ..config import C_GOLD, C_OUTLINE, W
 from ..data.characters import CHAR_ORDER, CHARACTERS
 from ..data.meta import CHEST_COST, SKINS
 from ..gfx import pixelart as pa
-from ..ui.widgets import Button, currency_row, draw_panel
+from ..ui.widgets import Button, currency_row, draw_panel, draw_title_bar, MARGIN
 from ..util import fmt_num
 from .base import Dialog, Scene
 
@@ -18,14 +18,14 @@ from .base import Dialog, Scene
 class ShopScene(Scene):
     def __init__(self, app) -> None:
         super().__init__(app)
-        self.add(Button((10, 10, 70, 64), "", self.back, icon="back", style="dark"))
+        self.add(Button((MARGIN, 10, 64, 64), "", self.back, icon="back", style="dark"))
         owned = [c for c in CHAR_ORDER if c in self.save["unlocked_chars"]]
         self.chars = owned
         self.ci = 0
         if self.save["last_char"] in owned:
             self.ci = owned.index(self.save["last_char"])
         self.add(Button((14, 150, 56, 80), "", lambda: self.cycle(-1), icon="back", style="dark"))
-        self.add(Button((W - 70, 150, 56, 80), "", lambda: self.cycle(1), icon="play", style="dark"))
+        self.add(Button((W - 70, 150, 56, 80), "", lambda: self.cycle(1), icon="forward", style="dark"))
         self.season = progression.season_for(None, "auto")     # skutečná sezóna podle data
         self.rows = []
         y = 262
@@ -128,8 +128,8 @@ class ShopScene(Scene):
     def draw(self, surf) -> None:
         font = assets.font
         surf.fill((40, 30, 48))
-        font.draw(surf, "OBCHOD", (W // 2, 18), (255, 220, 150), 5, "midtop", outline=C_OUTLINE)
-        currency_row(surf, W // 2 - 150, 100, self.save)
+        draw_title_bar(surf, "OBCHOD")
+        currency_row(surf, W // 2, 100, self.save, center=True)
         c = CHARACTERS[self.char]
         anim = assets.sprites.players[self.char]
         img = anim.frames[0][int(self.t * 3) % 2]
@@ -143,21 +143,22 @@ class ShopScene(Scene):
             r = img.get_rect(midbottom=(W // 2 - 60, 228))
             surf.blit(hat, (r.x + (hx + 1) * PX - hat.get_width() / 2, r.y + (hy + 1) * PX - hat.get_height() + 3))
         font.draw(surf, c.name, (W // 2 + 10, 170), (255, 240, 210), 2, "midleft", outline=C_OUTLINE)
-        font.draw(surf, "Skiny se nasazují vybranému zvířeti", (W // 2, 238), (200, 190, 210), 1, "midtop")
+        font.draw(surf, "Skin se nasadí vybranému zvířeti", (W // 2, 236), (200, 190, 210), 2, "midtop")
         for s, r, b in self.rows:
             draw_panel(surf, r, (58, 46, 66), shadow=False)
             hat = assets.sprites.hats[s["id"]]
             surf.blit(pa.scale(hat, 1.5), (r.x + 14, r.y + 18))
-            font.draw(surf, s["name"], (r.x + 74, r.y + 14), (255, 240, 210), 2, "topleft")
+            font.draw(surf, s["name"], (r.x + 74, r.y + 10), (255, 240, 210), 2, "topleft", outline=C_OUTLINE)
             tag = "vlastníš" if self.available(s) else ("sezónní" if s["season"] else "kosmetika")
-            font.draw(surf, tag, (r.x + 74, r.y + 40), (180, 200, 180) if self.available(s) else (190, 180, 200), 1,
+            font.draw(surf, tag, (r.x + 74, r.y + 38), (180, 200, 180) if self.available(s) else (190, 180, 200), 2,
                       "topleft")
         y = self.chest_y
         draw_panel(surf, (16, y, W - 32, 100), (70, 52, 40), shadow=False)
         ic = assets.icons.get("chest", 6)
         surf.blit(ic, (34, y + 22))
-        font.draw(surf, "Truhla štěstí", (120, y + 20), (255, 230, 170), 3, "topleft", outline=C_OUTLINE)
-        font.draw(surf, "Vejce, zlatá vejce nebo skin", (120, y + 58), (220, 200, 180), 1, "topleft")
+        font.draw(surf, "Truhla štěstí", (116, y + 14), (255, 230, 170), 2, "topleft", outline=C_OUTLINE)
+        for j, ln in enumerate(font.wrap("Vejce, zlatá vejce nebo skin", W - 226 - 116 - 10, 2)[:2]):
+            font.draw(surf, ln, (116, y + 42 + j * 22), (220, 200, 180), 2, "topleft")
         _ = C_GOLD
         self.draw_buttons(surf)
         self.draw_overlays(surf)

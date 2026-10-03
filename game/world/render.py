@@ -28,6 +28,7 @@ class RunRenderer:
         self._circ: dict = {}
         self._overlay: dict = {}
         self._slide_rot: dict = {}
+        self._ghosts: dict = {}
         self.fog = None
         self.vignette_red = None
         self.t = 0.0
@@ -374,16 +375,8 @@ class RunRenderer:
         items.sort(key=_sort_key)
         blits = []
         extra = []
-        player_drawn = p.dead and run.state == "dead"
-        py = p.y
+        hide_player = p.dead and run.state == "dead"
         for it in items:
-            if not player_drawn and it[1] == 3 and it[0] > py:
-                # hráč se kreslí nad všemi nepřáteli, ale pod překážkami, které stojí před ním
-                if blits:
-                    fblits(surf, blits)
-                    blits = []
-                self._player(surf, ox, oy)
-                player_drawn = True
             blits.append((it[2], (it[3], it[4])))
             e = it[5]
             if e is not None:
@@ -393,8 +386,28 @@ class RunRenderer:
             fblits(surf, blits)
         for it in extra:
             self._enemy_extra(surf, it, ox, oy)
-        if not player_drawn:
-            self._player(surf, ox, oy)
+        if hide_player:
+            return
+        # hráč VŽDY nad nepřáteli (B-32) …
+        self._player(surf, ox, oy)
+        # … a překážky stojící před ním (níž na obrazovce) se přes něj dokreslí poloprůhledně
+        pr = pygame.Rect(0, 0, 40, 48)
+        pr.midbottom = (p.x - ox, p.y - oy + 9)
+        for it in items:
+            if it[1] == 3 and it[0] > p.y:
+                img = it[2]
+                if pr.colliderect(pygame.Rect(it[3], it[4], img.get_width(), img.get_height())):
+                    surf.blit(self._ghost(img), (it[3], it[4]))
+
+    def _ghost(self, img: pygame.Surface) -> pygame.Surface:
+        g = self._ghosts.get(id(img))
+        if g is None:
+            g = img.copy()
+            g.set_alpha(120)
+            if len(self._ghosts) > 200:
+                self._ghosts.clear()
+            self._ghosts[id(img)] = g
+        return g
 
     def _enemy_extra(self, surf, it, ox, oy) -> None:
         e = it[5]
@@ -425,19 +438,14 @@ class RunRenderer:
         if p.dead:
             return
         sl = p.slide if run.char.special == "slide" else 0.0
-        if sl > 0.55 and (p.vx or p.vy):
-            # klouzání po břiše: tělo leží ve směru jízdy, břichem dolů (úhel kvantovaný na 16 směrů)
-            ang = math.atan2(p.vy, p.vx)
-            right = math.cos(ang) >= 0
-            face = 0 if right else 1
-            q = int(round(ang / (math.tau / 16))) % 16
-            key = (face, q, p.flash > 0)
+        if sl > 0.55:
+            # klouzání po břiše: vždy ležící tučňák (rotace přesně o 90° = čistý pixel art), hlavou
+            # vlevo/vpravo podle posledního vodorovného směru – i při jízdě nahoru/dolů (B-31)
+            key = (face, p.flash > 0)
             img = self._slide_rot.get(key)
             if img is None:
                 base = anim.flash[face][0] if p.flash > 0 else anim.frames[face][0]
-                a = q * 360 / 16
-                rot = -90 - a if right else 90 - (a - 180)
-                img = pygame.transform.rotate(base, rot)
+                img = pygame.transform.rotate(base, -90 if face == 0 else 90)
                 self._slide_rot[key] = img
         else:
             img = anim.flash[face][f] if p.flash > 0 else anim.frames[face][f]

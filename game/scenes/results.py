@@ -185,7 +185,7 @@ class ResultsScene(Scene):
             font.draw(surf, f"+{self.rewards['gold']}", (gx + g.get_width() + 6, rr.bottom - 38), C_GOLD, 2, "topleft")
         # zprávy (odemčení, výzvy) – po stránkách, ať se žádná neztratí
         self._msg_area = pygame.Rect(16, rr.bottom + 8, W - 32, self.b_again.rect.y - rr.bottom - 14)
-        pages = self._msg_pages(font, self._msg_area.w, self._msg_area.h - 14)
+        pages = self._msg_pages(font, self._msg_area.w, self._msg_area.h - 22)
         if pages:
             page = pages[self._page % len(pages)]
             y = self._msg_area.y
@@ -194,6 +194,6 @@ class ResultsScene(Scene):
                 y += font.line_h(2)
             if len(pages) > 1:
                 font.draw(surf, f"klepni pro další · {self._page % len(pages) + 1}/{len(pages)}",
-                          (W // 2, self._msg_area.bottom), (200, 190, 210), 1, "midbottom")
+                          (W // 2, self._msg_area.bottom + 4), (200, 190, 210), 2, "midbottom")
         self.draw_buttons(surf)
         self.draw_overlays(surf)

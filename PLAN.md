@@ -191,3 +191,17 @@ Všech 7 bodů „Definice hotovo“ je splněno:
 - B-22: kuřata se při vylepšení neteleportují. B-25: PC – ztráta fokusu / minimalizace = pauza.
 - B-27: denní odměna se kontroluje při každém vstupu do menu, posun hodin zpět nic nedá.
 - B-28: sezónní skin jen v reálné sezóně podle data (vynucená sezóna mění jen vzhled světa).
+
+### Třetí vlna – UI a design (B-29 – B-48)
+- Zvýraznění (rámečky výběru, pulzování) se kreslí AŽ po panelu a nafukuje se o sudé hodnoty (B-29).
+- Informační texty v měřítku 2 (podtituly tlačítek, karty, výběr zvířete, výzvy, Hnízdo, pauza, HUD); měřítko 1
+  zůstalo jen pro dekorace a technické detaily (B-30).
+- Tučňák klouže jako ležící sprite otočený přesně o 90° (B-31); hráč vždy nad nepřáteli, překážky před ním
+  poloprůhledně (B-32); na dotyku žádný „lepivý“ hover (B-33).
+- Tmavší výplně tlačítek + text s obrysem; vybraná možnost = rámeček + fajfka, oranžová jen pro akce (B-34, B-36).
+- Výběr zvířete přeskládaný: nadpisy Mapa / Mód / Obtížnost, tečky nad tlačítkem Koupit (B-35, B-42).
+- Karty bez přestřelení (B-37), bedna s řádky podle obsahu a paprsky přes celou obrazovku (B-38, B-39),
+  Obchod a Hnízdo bez přetékání (B-40, B-41), nezlomitelné „40 %“ a „1 500“ (B-43).
+- Jednotné nadpisy, šipky vpřed/zpět, centrovaný řádek měn, okraj 16 px (B-44); dialogy podle obsahu, Enter/Esc/
+  Zpět nikdy nespustí nevratnou akci (B-45); pauza bez prosvítajícího HUD (B-46); toasty podle scény (B-47);
+  verze v menu odpovídá buildu (B-48).

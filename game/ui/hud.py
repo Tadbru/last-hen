@@ -56,13 +56,13 @@ def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
     pi = icons.get("pause", 4)
     surf.blit(pi, pi.get_rect(center=pr.center))
     # zbraně a pasivky
-    x0, y0 = 8, 84
+    x0, y0 = 8, 82
     for i, w in enumerate(run.weapons):
-        _slot(surf, x0 + i * 30, y0, w.d.icon, w.level, w.evolved)
+        _slot(surf, x0 + i * 38, y0, w.d.icon, w.level, w.evolved)
     for i, (pid, lv) in enumerate(run.passives.items()):
-        _slot(surf, x0 + i * 30, y0 + 32, PASSIVES[pid].icon, lv, False, maxlv=5)
+        _slot(surf, x0 + i * 38, y0 + 40, PASSIVES[pid].icon, lv, False, maxlv=5)
     # boss bar
-    yb = 156
+    yb = 182
     for ctrl in run.bosses:
         e = ctrl.e
         if not e.alive:
@@ -73,7 +73,7 @@ def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
             pygame.draw.rect(surf, (255, 80, 60), (28, yb - 2, bw + 4, 18), 2)
         font.draw(surf, ctrl.name, (W // 2, yb - 4), (255, 220, 200), 2, "midbottom", outline=C_OUTLINE)
         if getattr(ctrl, "phase", 0):
-            font.draw(surf, f"Fáze {ctrl.phase}/3", (W - 32, yb + 18), (255, 200, 180), 1, "topright", outline=C_OUTLINE)
+            font.draw(surf, f"Fáze {ctrl.phase}/3", (W - 32, yb + 18), (255, 200, 180), 2, "topright", outline=C_OUTLINE)
         yb += 42
     # bannery
     by = H * 0.3
@@ -136,12 +136,12 @@ def _boss_arrows(surf, run, t: float) -> None:
 
 
 def _slot(surf, x, y, icon, lv, evo, maxlv=8) -> None:
-    pygame.draw.rect(surf, C_OUTLINE, (x, y, 28, 28))
-    pygame.draw.rect(surf, (255, 200, 60) if evo else (60, 46, 66), (x + 2, y + 2, 24, 24))
+    pygame.draw.rect(surf, C_OUTLINE, (x, y, 36, 36))
+    pygame.draw.rect(surf, (255, 200, 60) if evo else (60, 46, 66), (x + 2, y + 2, 32, 32))
     img = assets.icons.get(icon, 2, evo=False)
-    surf.blit(img, img.get_rect(center=(x + 14, y + 13)))
+    surf.blit(img, img.get_rect(center=(x + 15, y + 15)))
     if not evo:
-        assets.font.draw(surf, str(lv), (x + 26, y + 27), (255, 255, 255), 1, "bottomright", outline=C_OUTLINE)
+        assets.font.draw(surf, str(lv), (x + 37, y + 39), (255, 255, 255), 2, "bottomright", outline=C_OUTLINE)
 
 
 def _crow_button(surf, run, t: float) -> None:
@@ -163,7 +163,7 @@ def _crow_button(surf, run, t: float) -> None:
     icon = assets.icons.get("crow", 5 if ready else 4, gray=not ready)
     surf.blit(icon, icon.get_rect(center=(cx, cy - 2)))
     if ready:
-        assets.font.draw(surf, "KOKRHEJ!", (cx, cy + r + 4), (255, 230, 120), 1, "midtop", outline=C_OUTLINE)
+        assets.font.draw(surf, "KOKRHEJ!", (cx, cy + r + 2), (255, 230, 120), 2, "midtop", outline=C_OUTLINE)
 
 
 def crow_hit(x: float, y: float) -> bool:

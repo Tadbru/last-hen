@@ -175,7 +175,7 @@ class MenuScene(Scene):
         if self.season:
             font.draw(surf, SEASONS[self.season]["name"] + "!", (W // 2, 326), (255, 170, 80), 2, "midtop",
                       outline=C_OUTLINE)
-        currency_row(surf, 14, 30, self.save)
-        font.draw(surf, f"v{VERSION}", (W - 8, H - 8), (120, 110, 130), 1, "bottomright")
+        currency_row(surf, W // 2, 30, self.save, center=True)
+        font.draw(surf, f"v{VERSION}", (W - 8, H - 4), (200, 215, 190), 2, "bottomright", outline=C_OUTLINE)
         self.draw_buttons(surf)
         self.draw_overlays(surf)

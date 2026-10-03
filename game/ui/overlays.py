@@ -5,12 +5,21 @@ import math
 
 import pygame
 
-from .. import assets, progression
+from .. import assets, device, progression
 from ..config import C_GOLD, C_OUTLINE, C_TEXT, H, RARITY_COLORS, RARITY_NAMES, W
 from ..data.passives import PASSIVES
 from ..data.weapons import WEAPONS
-from ..util import ease_out_back, fmt_num
-from .widgets import Button, draw_icon_frame, draw_panel
+from ..util import ease_out_back, ease_out_cubic, fmt_num
+from .widgets import Button, draw_frame, draw_icon_frame, draw_panel
+
+
+def _compact(v: float) -> str:
+    v = int(v)
+    if v >= 1_000_000:
+        return f"{v / 1_000_000:.1f}M"
+    if v >= 10_000:
+        return f"{v // 1000}k"
+    return fmt_num(v)
 
 
 def _dim(surf, a: int = 170) -> None:
@@ -118,6 +127,8 @@ class LevelUpOverlay(Overlay):
             self.offer_id = id(r.offer)
             self.t = 0.0
             self.skip_arm = 0.0
+            self.hover = -1             # nová nabídka nesmí mít „předvybranou“ kartu (B-33)
+            self.pressed_card = -1
         if self.skip_arm > 0:
             self.b_skip.text = "Opravdu?"
             self.b_skip.sub = "klepni znovu"
@@ -179,6 +190,8 @@ class LevelUpOverlay(Overlay):
             self._pick(i)
 
     def on_move(self, ev) -> None:
+        if device.MOBILE:
+            return                      # na dotyku se zvýrazňuje jen držená karta
         self.hover = -1
         for i in range(len(self.run.offer or [])):
             if self.card_rect(i).collidepoint(ev.x, ev.y):
@@ -215,28 +228,27 @@ class LevelUpOverlay(Overlay):
 
     def _card(self, surf, i: int, card) -> None:
         font = assets.font
-        appear = ease_out_back(max(0.0, min(1.0, (self.t - i * 0.08) * 4)))
+        # přílet zprava bez přestřelení za levý okraj (B-37)
+        appear = ease_out_cubic(max(0.0, min(1.0, (self.t - i * 0.08) * 4)))
         if appear <= 0:
             return
         r = self.card_rect(i)
         r.x += int((1 - appear) * W)
         pulse = 0.5 + 0.5 * math.sin(self.t * 4 + i)
         rc = RARITY_COLORS[card.rarity]
-        if self.hover == i or card.rarity > 0:
-            g = 4 + int(pulse * 4) + (4 if self.hover == i else 0)
-            pygame.draw.rect(surf, rc, r.inflate(g, g), 3)
         if self.pressed_card == i:
             r.y += 3
         bg = (64, 48, 74) if not self.banish_mode else (90, 40, 50)
         draw_panel(surf, r, bg, border=rc if card.rarity else C_OUTLINE)
-        # ikona
-        evo = False
-        draw_icon_frame(surf, (r.x + 14, r.y + 16, 84, 84), card.icon, evo=evo, scale=5)
-        # rarita
-        font.draw(surf, RARITY_NAMES[card.rarity], (r.right - 14, r.y + 12), rc, 1, "topright", outline=C_OUTLINE)
-        # název a úroveň
+        # zvýraznění AŽ po panelu – stín panelu dřív mazal spodní hranu rámečku (B-29)
+        if self.hover == i or self.pressed_card == i:
+            draw_frame(surf, r, (255, 250, 230), 3, 8)
+        elif card.rarity > 0:
+            draw_frame(surf, r, rc, 3, 6 + 2 * int(pulse * 2))
+        draw_icon_frame(surf, (r.x + 14, r.y + 16, 84, 84), card.icon, evo=False, scale=5)
+        # název, úroveň a rarita (vše čitelné – měřítko 2+)
         tx = r.x + 112
-        font.draw(surf, card.title, (tx, r.y + 14), (255, 240, 200), 3, "topleft", outline=C_OUTLINE)
+        font.draw(surf, card.title, (tx, r.y + 12), (255, 240, 200), 3, "topleft", outline=C_OUTLINE)
         if card.kind in ("weapon", "passive"):
             if card.new:
                 tag = "NOVÉ!" if card.to <= 1 else f"NOVÉ! Úr. {card.to}"
@@ -244,21 +256,26 @@ class LevelUpOverlay(Overlay):
             else:
                 tag = f"Úr. {card.cur} → {card.to}"
                 col = (150, 210, 255)
-            font.draw(surf, tag, (tx, r.y + 52), col, 2, "topleft", outline=C_OUTLINE)
-            if card.kind == "weapon":
-                d = WEAPONS[card.id]
-                if d.evo_passive:
-                    font.draw(surf, f"Evoluce s: {PASSIVES[d.evo_passive].name}", (tx, r.y + 78), (200, 170, 230), 1,
-                              "topleft", outline=C_OUTLINE)
-            elif card.kind == "passive":
-                evos = [WEAPONS[w.id].name for w in self.run.weapons if WEAPONS[w.id].evo_passive == card.id
-                        and not w.evolved]
-                if evos:
-                    font.draw(surf, f"Evoluce: {evos[0]}", (tx, r.y + 78), (255, 210, 120), 1, "topleft",
-                              outline=C_OUTLINE)
-        lines = font.wrap(card.desc, r.w - 128, 2)[:3]
-        y = r.y + 96
-        for ln in lines:
+            font.draw(surf, tag, (tx, r.y + 50), col, 2, "topleft", outline=C_OUTLINE)
+            if card.rarity:
+                font.draw(surf, RARITY_NAMES[card.rarity], (r.right - 14, r.y + 50), rc, 2, "topright",
+                          outline=C_OUTLINE)
+        hint = ""
+        if card.kind == "weapon":
+            d = WEAPONS[card.id]
+            if d.evo_passive:
+                hint = f"Evoluce s: {PASSIVES[d.evo_passive].name}"
+        elif card.kind == "passive":
+            evos = [WEAPONS[w.id].name for w in self.run.weapons if WEAPONS[w.id].evo_passive == card.id
+                    and not w.evolved]
+            if evos:
+                hint = f"Evoluce: {evos[0]}"
+        y = r.y + 76
+        if hint:
+            font.draw(surf, hint, (tx, y), (255, 210, 120), 2, "topleft", outline=C_OUTLINE)
+            y += 26
+        cap = (r.bottom - 6 - y) // 22
+        for ln in font.wrap(card.desc, r.w - 128, 2)[:cap]:
             font.draw(surf, ln, (tx, y), (230, 225, 235), 2, "topleft")
             y += 22
         if self.banish_mode and card.kind in ("weapon", "passive"):
@@ -318,14 +335,16 @@ class ChestOverlay(Overlay):
             font.draw(surf, "klepni pro otevření", (cx, cy + 90), C_TEXT, 2, "midtop", outline=C_OUTLINE)
             return
         # paprsky
-        rays = pygame.Surface((W, 560), pygame.SRCALPHA)
+        # paprsky přes celou obrazovku (dřív useknuté rovnou čarou v polovině – B-39)
+        rays = pygame.Surface((W, H), pygame.SRCALPHA)
         col = (255, 220, 90, 60) if not evo else (255, 120, 255, 70)
+        ry = 168
         for i in range(12):
             a = self.t * 0.8 + i * math.tau / 12
-            pts = [(cx, 280), (cx + math.cos(a) * 600, 280 + math.sin(a) * 600),
-                   (cx + math.cos(a + 0.15) * 600, 280 + math.sin(a + 0.15) * 600)]
+            pts = [(cx, ry), (cx + math.cos(a) * 1200, ry + math.sin(a) * 1200),
+                   (cx + math.cos(a + 0.15) * 1200, ry + math.sin(a + 0.15) * 1200)]
             pygame.draw.polygon(rays, col, pts)
-        surf.blit(rays, (0, 20))
+        surf.blit(rays, (0, 0))
         img = assets.icons.get("chest", 6)
         surf.blit(img, img.get_rect(center=(cx, 168)))
         font.draw(surf, "EVOLUCE!" if evo else "Poklad!", (cx, 56), (255, 140, 255) if evo else C_GOLD, 5, "midtop",
@@ -335,9 +354,21 @@ class ChestOverlay(Overlay):
         items = self.reward["items"] if self.reward else []
         n = max(1, len(items))
         y0, y1, gap = 252, self.b_ok.rect.y - 14, 10
-        row_h = int(min(150, (y1 - y0) / n - gap))
+        fs = 76
+        tw = (W - 60) - (fs + 22) - 12
+        # výška řádku podle obsahu (B-38): text svisle na střed k ikoně, žádná prázdná půlka panelu
+        layouts = []
+        for icon, name, sub, is_evo in items:
+            name_sc = 3 if font.width(name, 3) <= tw else 2
+            lines = font.wrap(sub, tw, 2)
+            text_h = font.line_h(name_sc) + 2 + len(lines) * font.line_h(2)
+            layouts.append((name_sc, lines, text_h, max(fs + 16, text_h + 18)))
+        total = sum(lay[3] for lay in layouts) + gap * (len(layouts) - 1)
+        if total > y1 - y0:
+            # nouzově (5 položek s dlouhým popisem) – popis jen 1 řádek
+            layouts = [(2, lay[1][:1], font.line_h(2) * 2 + 2, fs + 6) for lay in layouts]
         y = y0
-        for i, (icon, name, sub, is_evo) in enumerate(items):
+        for i, ((icon, name, sub, is_evo), (name_sc, lines, text_h, row_h)) in enumerate(zip(items, layouts)):
             k = ease_out_back(max(0.0, min(1.0, (self.t - 1.1 - i * 0.25) * 4)))
             if k <= 0:
                 y += row_h + gap
@@ -345,21 +376,16 @@ class ChestOverlay(Overlay):
             r = pygame.Rect(30, y, W - 60, row_h)
             r.x += int((1 - k) * 200)
             draw_panel(surf, r, (90, 60, 30) if is_evo else (64, 48, 74), border=(255, 200, 60) if is_evo else C_OUTLINE)
-            fs = min(76, row_h - 20)
-            draw_icon_frame(surf, (r.x + 10, r.y + (row_h - fs) // 2, fs, fs), icon, evo=is_evo, scale=5 if fs >= 70 else 4)
+            ifs = min(fs, row_h - 12)
+            draw_icon_frame(surf, (r.x + 10, r.y + (row_h - ifs) // 2, ifs, ifs), icon, evo=is_evo,
+                            scale=5 if ifs >= 70 else 4)
             tx = r.x + fs + 22
-            tw = r.right - tx - 10
-            name_sc = 3 if row_h >= 100 and font.width(name, 3) <= tw else 2
-            font.draw(surf, name, (tx, r.y + 10), (255, 240, 200), name_sc, "topleft", outline=C_OUTLINE)
-            ty = r.y + 14 + font.line_h(name_sc)
-            # popis: raději menší písmo než useknutý text
-            for sc in (2, 1):
-                lines = font.wrap(sub, tw, sc)
-                cap = max(1, (r.bottom - 6 - ty) // font.line_h(sc))
-                if len(lines) <= cap or sc == 1:
-                    break
-            for j, ln in enumerate(lines[:cap]):
-                font.draw(surf, ln, (tx, ty + j * font.line_h(sc)), (230, 220, 240), sc, "topleft")
+            ty = r.y + (row_h - text_h) // 2
+            font.draw(surf, name, (tx, ty), (255, 240, 200), name_sc, "topleft", outline=C_OUTLINE)
+            ty += font.line_h(name_sc) + 2
+            for ln in lines:
+                font.draw(surf, ln, (tx, ty), (230, 220, 240), 2, "topleft")
+                ty += font.line_h(2)
             y += row_h + gap
         super().draw(surf)
 
@@ -424,31 +450,38 @@ class PauseOverlay(Overlay):
     def draw(self, surf) -> None:
         font = assets.font
         run = self.run
-        _dim(surf, 200)
-        font.draw(surf, "PAUZA", (W // 2, 50), (255, 220, 90), 6, "midtop", outline=C_OUTLINE)
-        r = pygame.Rect(30, 140, W - 60, 440)
+        _dim(surf, 225)
+        font.draw(surf, "PAUZA", (W // 2, 36), (255, 220, 90), 6, "midtop", outline=C_OUTLINE)
+        font.draw(surf, f"{run.char.name} · {run.biome.short or run.biome.name} · {run.diff.name}", (W // 2, 108),
+                  C_TEXT, 2, "midtop", outline=C_OUTLINE)
+        r = pygame.Rect(24, 140, W - 48, 480)
         draw_panel(surf, r, (52, 38, 60))
-        font.draw(surf, f"{run.char.name} · {run.biome.name} · {run.diff.name}", (r.centerx, r.y + 16), C_TEXT, 2,
-                  "midtop")
-        y = r.y + 50
+        cw = r.w // 2 - 18
+        cols = (r.x + 12, r.centerx + 6)
+        font.draw(surf, "Zbraně", (cols[0], r.y + 12), (255, 214, 120), 2, "topleft", outline=C_OUTLINE)
+        font.draw(surf, "Pasivky", (cols[1], r.y + 12), (255, 214, 120), 2, "topleft", outline=C_OUTLINE)
+        tw = cw - 48
+        y = r.y + 44
         for w in run.weapons:
-            draw_icon_frame(surf, (r.x + 16, y, 40, 40), w.d.icon, evo=w.evolved, scale=3)
+            draw_icon_frame(surf, (cols[0], y, 40, 40), w.d.icon, evo=w.evolved, scale=3)
             lvl = "EVO" if w.evolved else f"Úr. {w.level}"
-            font.draw(surf, f"{w.d.name}", (r.x + 66, y + 4), (255, 240, 200), 2, "topleft")
-            font.draw(surf, f"{lvl} · {fmt_num(w.damage_dealt)} dmg", (r.x + 66, y + 24), (190, 180, 200), 1, "topleft")
-            y += 46
-        y2 = r.y + 50
+            font.draw(surf, font.fit(w.d.name, tw, 2), (cols[0] + 48, y - 2), (255, 240, 200), 2, "topleft")
+            font.draw(surf, f"{lvl} · {_compact(w.damage_dealt)}", (cols[0] + 48, y + 20), (200, 190, 210), 2,
+                      "topleft")
+            y += 48
+        y = r.y + 44
         for pid, lv in run.passives.items():
             d = PASSIVES[pid]
-            draw_icon_frame(surf, (r.centerx + 20, y2, 40, 40), d.icon, scale=3)
-            font.draw(surf, d.name, (r.centerx + 70, y2 + 4), (255, 240, 200), 1, "topleft")
-            font.draw(surf, f"Úr. {lv}/5", (r.centerx + 70, y2 + 22), (190, 180, 200), 1, "topleft")
-            y2 += 46
+            draw_icon_frame(surf, (cols[1], y, 40, 40), d.icon, scale=3)
+            font.draw(surf, font.fit(d.name, tw, 2), (cols[1] + 48, y - 2), (255, 240, 200), 2, "topleft")
+            font.draw(surf, f"Úr. {lv}/5", (cols[1] + 48, y + 20), (200, 190, 210), 2, "topleft")
+            y += 48
         st = run.player.stats
         stats = [f"Zdraví {int(run.player.hp)}/{int(st.max_hp)}", f"Síla ×{st.might:.2f}",
                  f"Rychlost {int(st.speed)}", f"Krit. {int(st.crit_chance * 100)} % ×{st.crit_mult:g}",
                  f"Zabití {fmt_num(run.kills)}", f"Mince {run.coins}"]
-        y = r.bottom - 74
-        for i, s in enumerate(stats):
-            font.draw(surf, s, (r.x + 20 + (i % 2) * 250, y + (i // 2) * 22), (210, 200, 220), 1, "topleft")
+        y = r.y + 352
+        pygame.draw.line(surf, (90, 70, 100), (r.x + 12, y - 10), (r.right - 12, y - 10), 2)
+        for i, s_ in enumerate(stats):
+            font.draw(surf, s_, (cols[i % 2], y + (i // 2) * 28), (215, 205, 225), 2, "topleft")
         super().draw(surf)

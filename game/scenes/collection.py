@@ -10,10 +10,10 @@ from ..data.enemies import ENEMIES
 from ..data.passives import PASSIVES
 from ..data.weapons import WEAPONS
 from ..gfx import pixelart as pa
-from ..ui.widgets import Button, ScrollArea, draw_icon_frame, draw_panel
+from ..ui.widgets import Button, ScrollArea, draw_icon_frame, draw_panel, draw_title_bar, MARGIN
 from .base import Scene
 
-TABS = [("enemies", "Nepřátelé"), ("bosses", "Bossové"), ("weapons", "Zbraně"), ("evolutions", "Evoluce"),
+TABS = [("enemies", "Lišky"), ("bosses", "Bossové"), ("weapons", "Zbraně"), ("evolutions", "Evoluce"),
         ("passives", "Pasivky")]
 TILE = 96
 
@@ -21,12 +21,13 @@ TILE = 96
 class CollectionScene(Scene):
     def __init__(self, app) -> None:
         super().__init__(app)
-        self.add(Button((10, 10, 70, 64), "", self.back, icon="back", style="dark"))
+        self.add(Button((MARGIN, 10, 64, 64), "", self.back, icon="back", style="dark"))
         self.tab = "enemies"
         self.tab_btns = []
         tw = (W - 20) // len(TABS)
         for i, (tid, name) in enumerate(TABS):
-            b = self.add(Button((10 + i * tw, 132, tw - 4, 64), name, lambda t=tid: self.set_tab(t), scale=1))
+            sc = 2 if assets.font.width(name, 2) <= tw - 16 else 1
+            b = self.add(Button((10 + i * tw, 132, tw - 4, 64), name, lambda t=tid: self.set_tab(t), scale=sc))
             self.tab_btns.append((tid, b))
         self.scroll = ScrollArea((10, 206, W - 20, 470))
         self.sel = None
@@ -37,7 +38,7 @@ class CollectionScene(Scene):
         self.tab = tid
         self.sel = None
         for t, b in self.tab_btns:
-            b.style = "primary" if t == tid else "secondary"
+            b.selected = t == tid          # vybraná záložka = rámeček, ne oranžová akce (B-36)
         items = progression.COLLECTION_CATS[tid][1]
         rows = (len(items) + 4) // 5
         self.scroll.content_h = rows * (TILE + 8)
@@ -92,11 +93,11 @@ class CollectionScene(Scene):
     def draw(self, surf) -> None:
         font = assets.font
         surf.fill((30, 30, 44))
-        font.draw(surf, "SBÍRKA", (W // 2, 18), (255, 220, 150), 5, "midtop", outline=C_OUTLINE)
+        draw_title_bar(surf, "SBÍRKA")
         have, total = progression.collection_progress(self.save)
         font.draw(surf, f"Objeveno {have}/{total} ({int(100 * have / max(1, total))} %)", (W // 2, 74),
                   (210, 210, 230), 2, "midtop")
-        font.draw(surf, "100 % kategorie = 3 zlatá vejce", (W // 2, 100), (255, 214, 120), 1, "midtop")
+        font.draw(surf, "100 % kategorie = 3 zlatá vejce", (W // 2, 100), (255, 214, 120), 2, "midtop")
         r = self.scroll.rect
         clip = surf.get_clip()
         surf.set_clip(r)
@@ -152,6 +153,6 @@ class CollectionScene(Scene):
             font.draw(surf, name, (dr.x + 130, dr.y + 20), (255, 230, 170), 3, "topleft", outline=C_OUTLINE)
             font.draw_wrapped(surf, desc, pygame.Rect(dr.x + 130, dr.y + 62, dr.w - 146, 120), C_TEXT, 2)
             if extra:
-                font.draw_wrapped(surf, extra, pygame.Rect(dr.x + 20, dr.bottom - 56, dr.w - 40, 50), C_GOLD, 1)
+                font.draw_wrapped(surf, extra, pygame.Rect(dr.x + 20, dr.bottom - 60, dr.w - 40, 50), C_GOLD, 2)
         self.draw_buttons(surf)
         self.draw_overlays(surf)

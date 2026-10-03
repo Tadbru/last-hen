@@ -33,15 +33,26 @@ def draw_bar(surf, rect, ratio: float, color, back=(30, 22, 36), border=C_OUTLIN
         pygame.draw.rect(surf, mul_color(color, 1.3), (fill.x, fill.y, fill.w, max(1, r.h // 4)))
 
 
+# Výplně dost tmavé pro bílý text (kontrast ≥ 3:1 podle WCAG), text navíc s tmavým obrysem.
+# Oranžová „primary“ je vyhrazená pro hlavní akce; vybraná možnost se značí rámečkem (Button.selected).
 STYLES = {
-    "primary": (234, 150, 40),
+    "primary": (204, 108, 24),
     "secondary": (78, 58, 86),
-    "green": (84, 170, 70),
-    "danger": (190, 56, 56),
-    "blue": (60, 120, 200),
-    "gold": (210, 170, 40),
+    "green": (52, 132, 48),
+    "danger": (184, 50, 50),
+    "blue": (52, 106, 188),
+    "gold": (164, 118, 20),
     "dark": (44, 32, 50),
 }
+SELECT_COLOR = (255, 214, 70)
+MARGIN = 16          # jednotný okraj obrazovek (B-44)
+TITLE_SCALE = 5
+
+
+def draw_frame(surf, rect, color, width: int = 3, grow: int = 6) -> None:
+    """Rámeček zvýraznění kolem prvku – kreslí se AŽ PO panelu (jinak ho přepíše jeho stín)."""
+    g = grow + (grow & 1)            # sudé nafouknutí → rámeček souměrně
+    pygame.draw.rect(surf, color, pygame.Rect(rect).inflate(g, g), width)
 
 
 class Button:
@@ -65,6 +76,8 @@ class Button:
         self.pulse = False
         self.badge = ""
         self.color = None
+        self.selected = False          # zvolená možnost (rámeček + fajfka), ne akce
+        self.sel_color = SELECT_COLOR
 
     def contains(self, x: float, y: float) -> bool:
         return self.visible and self.rect.collidepoint(x, y)
@@ -85,12 +98,18 @@ class Button:
         elif self.hover:
             base = mul_color(base, 1.12)
         r = self.rect.copy()
-        if self.pulse and self.enabled:
-            k = 0.5 + 0.5 * math.sin(t * 6)
-            pygame.draw.rect(surf, (255, 230, 140), r.inflate(6 + 4 * k, 6 + 4 * k), 3)
         if self.pressed:
             r.y += 3
         draw_panel(surf, r, base, shadow=not self.pressed)
+        # zvýraznění až nad panelem (B-29: stín panelu dřív mazal spodní hranu)
+        if self.selected:
+            draw_frame(surf, r, self.sel_color, 3, 6)
+            if r.w >= 130:                      # fajfka jen tam, kde nepřekryje text
+                ck = assets.icons.get("check", 2)
+                surf.blit(ck, (r.right - ck.get_width() - 6, r.y + 6))
+        if self.pulse and self.enabled:
+            k = 0.5 + 0.5 * math.sin(t * 6)
+            draw_frame(surf, r, (255, 230, 140), 3, 6 + 2 * int(k * 2))
         tc = C_TEXT if self.enabled else (150, 140, 150)
         cx = r.centerx
         content_w = font.width(self.text, self.scale) if self.text else 0
@@ -99,15 +118,17 @@ class Button:
             icon_img = assets.icons.get(self.icon, self.icon_scale, gray=not self.enabled)
             content_w += icon_img.get_width() + (8 if self.text else 0)
         x = cx - content_w // 2
-        cy = r.centery - (6 if self.sub else 0)
+        cy = r.centery - (11 if self.sub else 0)
         if icon_img is not None:
             surf.blit(icon_img, (x, cy - icon_img.get_height() // 2))
             x += icon_img.get_width() + 8
         if self.text:
-            font.draw(surf, self.text, (x, cy), tc, self.scale, "midleft")
+            font.draw(surf, self.text, (x, cy), tc, self.scale, "midleft", outline=C_OUTLINE)
         if self.sub:
-            font.draw(surf, self.sub, (cx, r.bottom - 8), (230, 220, 200) if self.enabled else (140, 130, 140), 1,
-                      "midbottom")
+            # podtitul čitelně (měřítko 2), menší jen když se opravdu nevejde
+            ss = 2 if font.width(self.sub, 2) <= r.w - 14 else 1
+            font.draw(surf, self.sub, (cx, r.bottom - 6), (240, 232, 214) if self.enabled else (150, 140, 150), ss,
+                      "midbottom", outline=C_OUTLINE)
         if self.badge:
             bw = font.width(self.badge, 1) + 10
             br = pygame.Rect(r.right - bw - 2, r.y - 8, bw, 16)
@@ -179,15 +200,16 @@ def draw_icon_frame(surf, rect, icon: str, evo: bool = False, gray: bool = False
     surf.blit(img, img.get_rect(center=r.center))
 
 
-def currency_row(surf, x: int, y: int, save, scale: int = 2, anchor_right: bool = False) -> None:
+def currency_row(surf, x: int, y: int, save, scale: int = 2, anchor_right: bool = False,
+                 center: bool = False) -> None:
     font = assets.font
     items = [("cur_egg", save["eggs"]), ("cur_gold", save["gold"]), ("cur_token", save["tokens"])]
     from ..util import fmt_num
     widths = []
     for icon, val in items:
         widths.append(assets.icons.get(icon, 3).get_width() + 6 + font.width(fmt_num(val), scale) + 14)
-    total = sum(widths)
-    cx = x - total if anchor_right else x
+    total = sum(widths) - 14
+    cx = x - total // 2 if center else (x - total if anchor_right else x)
     for (icon, val), w in zip(items, widths):
         img = assets.icons.get(icon, 3)
         surf.blit(img, (cx, y - img.get_height() // 2))
@@ -196,9 +218,11 @@ def currency_row(surf, x: int, y: int, save, scale: int = 2, anchor_right: bool 
 
 
 def draw_title_bar(surf, title: str, y: int = 18) -> None:
+    """Nadpis obrazovky – stejná velikost na všech obrazovkách (B-44)."""
     from ..config import W
     font = assets.font
-    font.draw(surf, title, (W // 2, y), (255, 230, 150), 4, "midtop", outline=C_OUTLINE)
+    sc = TITLE_SCALE if font.width(title, TITLE_SCALE) <= W - 2 * (MARGIN + 72) else 4
+    font.draw(surf, title, (W // 2, y), (255, 230, 150), sc, "midtop", outline=C_OUTLINE)
 
 
 __all__ = ["Button", "ScrollArea", "draw_panel", "draw_bar", "draw_icon_frame", "currency_row", "draw_title_bar",

@@ -5,7 +5,7 @@ import math
 
 import pygame
 
-from .. import assets
+from .. import assets, device
 from ..config import C_OUTLINE, C_TEXT, H, W
 from ..ui.widgets import Button, draw_panel
 
@@ -35,7 +35,15 @@ class Dialog:
         self.t = 0.0
         self.closed = False
         self.buttons: list[Button] = []
-        self.rect = pygame.Rect(40, H // 2 - 220, W - 80, 440)
+        if ad:
+            h = 440
+        else:
+            # výška podle obsahu (B-45) – žádné poloprázdné dialogy
+            font = assets.font
+            lines = len(font.wrap(text, W - 80 - 48, 2)) if text else 0
+            ih = assets.icons.get(icon, 5).get_height() + 12 if icon else 0
+            h = max(220, 24 + ih + 46 + lines * font.line_h(2) + 24 + (90 if buttons else 0))
+        self.rect = pygame.Rect(40, H // 2 - h // 2, W - 80, h)
         bs = buttons or []
         n = len(bs)
         bw = (self.rect.w - 40 - (n - 1) * 12) // max(1, n)
@@ -68,10 +76,18 @@ class Dialog:
                 b.pressed = False
                 if b.contains(ev.x, ev.y):
                     b.click()
-        elif ev.type == "key" and ev.key in (pygame.K_RETURN, pygame.K_SPACE) and self.buttons:
-            self.buttons[0].click()
-        elif ev.type == "key" and ev.key == pygame.K_ESCAPE and self.buttons:
-            self.buttons[-1].click()
+        elif ev.type == "key" and ev.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_ESCAPE) and self.buttons:
+            # klávesy (i Android Zpět) nikdy nespustí nevratnou („danger“) akci
+            safe = [i for i, b in enumerate(self.buttons) if b.style != "danger"]
+            if not safe:
+                return
+            if ev.key == pygame.K_ESCAPE:
+                i = safe[-1]
+                if i == safe[0] and len(safe) < len(self.buttons) and i == 0:
+                    return       # jediná bezpečná volba je hlavní akce (např. reklama) – Zpět nic nespustí
+            else:
+                i = safe[0]
+            self.buttons[i].click()
 
     def update(self, dt: float) -> None:
         self.t += dt
@@ -91,7 +107,7 @@ class Dialog:
         r = self.rect.inflate(-(1 - k) * 60, -(1 - k) * 60)
         if self.ad:
             draw_panel(surf, r, (250, 236, 200))
-            font.draw(surf, "REKLAMA", (r.right - 14, r.y + 12), (160, 120, 80), 1, "topright", shadow=False)
+            font.draw(surf, "REKLAMA", (r.right - 14, r.y + 12), (140, 100, 60), 2, "topright", shadow=False)
             font.draw(surf, self.title, (r.centerx, r.y + 40), (120, 60, 20), 3, "midtop", shadow=False)
             # „produkt“
             cx, cy = r.centerx, r.centery - 10
@@ -99,7 +115,6 @@ class Dialog:
             pygame.draw.rect(surf, (230, 190, 40), (cx - 50, cy - 60 + bounce, 100, 120))
             pygame.draw.rect(surf, (140, 90, 20), (cx - 50, cy - 60 + bounce, 100, 120), 4)
             font.draw(surf, "KUKUŘICE", (cx, cy - 10 + bounce), (120, 60, 20), 2, "center", shadow=False)
-            font.draw(surf, "™", (cx + 46, cy - 50 + bounce), (120, 60, 20), 1, "center", shadow=False)
             font.draw_wrapped(surf, self.text, pygame.Rect(r.x + 30, cy + 80, r.w - 60, 80), (90, 60, 40), 2,
                               "center", shadow=False)
             font.draw(surf, f"Reklama skončí za {max(0, math.ceil(self.timer))} s", (r.centerx, r.bottom - 30),
@@ -113,7 +128,8 @@ class Dialog:
             y += img.get_height() + 12
         font.draw(surf, self.title, (r.centerx, y), (255, 220, 140), 3, "midtop", outline=C_OUTLINE)
         y += 46
-        font.draw_wrapped(surf, self.text, pygame.Rect(r.x + 24, y, r.w - 48, r.h - 200), C_TEXT, 2, "center")
+        font.draw_wrapped(surf, self.text, pygame.Rect(r.x + 24, y, r.w - 48, max(24, r.bottom - 100 - y)), C_TEXT, 2,
+                          "center")
         if k >= 1:
             for b in self.buttons:
                 b.draw(surf, self.t)
@@ -121,6 +137,7 @@ class Dialog:
 
 class Scene:
     music = "menu"
+    toast_y = 112        # pod nadpisem; scény s akcemi nahoře si to přepíšou (B-47)
 
     def __init__(self, app) -> None:
         self.app = app
@@ -165,6 +182,9 @@ class Scene:
         elif ev.type == "up":
             b = self._pressed
             self._pressed = None
+            if device.MOBILE:
+                for bb in self.buttons:
+                    bb.hover = False      # na dotyku žádný „hover“ po zvednutí prstu
             if b is not None:
                 b.pressed = False
                 if b.contains(ev.x, ev.y):
@@ -224,7 +244,8 @@ class Scene:
 
     def draw_overlays(self, surf) -> None:
         font = assets.font
-        y = H - 150
+        y = self.toast_y
+        down = y < H // 2          # nahoře se další toasty skládají dolů, dole nahoru
         for text, col, life in self.toasts[-4:]:
             a = 255 if life > 0.4 else int(255 * life / 0.4)
             w = min(W - 30, font.width(text, 2) + 30)
@@ -234,7 +255,7 @@ class Scene:
             s.fill((20, 12, 24, int(a * 0.85)))
             surf.blit(s, r)
             font.draw(surf, text, r.center, col, 2, "center", alpha=a)
-            y -= 46
+            y += 46 if down else -46
         if self.modal is not None:
             self.modal.draw(surf)
 

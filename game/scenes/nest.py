@@ -6,7 +6,7 @@ import pygame
 from .. import assets
 from ..config import C_GOLD, C_OUTLINE, C_TEXT, W
 from ..data.meta import NEST_UPGRADES
-from ..ui.widgets import Button, currency_row, draw_icon_frame, draw_panel
+from ..ui.widgets import Button, currency_row, draw_icon_frame, draw_panel, draw_title_bar, MARGIN
 from ..util import fmt_num
 from .base import Dialog, Scene
 
@@ -14,7 +14,7 @@ from .base import Dialog, Scene
 class NestScene(Scene):
     def __init__(self, app) -> None:
         super().__init__(app)
-        self.add(Button((10, 10, 70, 64), "", self.back, icon="back", style="dark"))
+        self.add(Button((MARGIN, 10, 64, 64), "", self.back, icon="back", style="dark"))
         self.rows = []
         y = 150
         for u in NEST_UPGRADES:
@@ -22,6 +22,8 @@ class NestScene(Scene):
             self.rows.append((u, pygame.Rect(16, y, W - 32, 102), b))
             y += 114
         self.add(Button((W // 2 - 140, y + 6, 280, 64), "Vrátit vše", self.refund, icon="reroll", style="secondary"))
+        tw = W - 186 - 114 - 8
+        self.name_sc = 3 if all(assets.font.width(u["name"], 3) <= tw for u in NEST_UPGRADES) else 2
         self._sync()
 
     def _sync(self) -> None:
@@ -74,16 +76,18 @@ class NestScene(Scene):
     def draw(self, surf) -> None:
         font = assets.font
         surf.fill((44, 32, 34))
-        font.draw(surf, "HNÍZDO", (W // 2, 18), (255, 220, 150), 5, "midtop", outline=C_OUTLINE)
-        font.draw(surf, "Trvalá vylepšení pro všechna zvířata", (W // 2, 72), (220, 200, 190), 2, "midtop")
-        currency_row(surf, W // 2 - 140, 118, self.save)
+        draw_title_bar(surf, "HNÍZDO")
+        font.draw(surf, "Bonus za úroveň · pro všechna zvířata", (W // 2, 74), (220, 200, 190), 2, "midtop")
+        currency_row(surf, W // 2, 116, self.save, center=True)
         meta = self.save["meta"]
         for u, r, b in self.rows:
             draw_panel(surf, r, (66, 50, 52))
             draw_icon_frame(surf, (r.x + 12, r.y + 14, 74, 74), u["icon"], scale=4)
-            sc = 3 if font.width(u["name"], 3) < r.w - 290 else 2
-            font.draw(surf, u["name"], (r.x + 98, r.y + 14), (255, 240, 210), sc, "topleft", outline=C_OUTLINE)
-            font.draw(surf, u["desc"] + " / úroveň", (r.x + 98, r.y + 50), (210, 200, 200), 1, "topleft")
+            # jedno měřítko pro všechny názvy (B-41), popis čitelně (B-30)
+            font.draw(surf, u["name"], (r.x + 98, r.y + 10), (255, 240, 210), self.name_sc, "topleft",
+                      outline=C_OUTLINE)
+            font.draw(surf, font.fit(u["desc"], W - 186 - 114 - 8, 2), (r.x + 98, r.y + 46), (220, 210, 205), 2,
+                      "topleft")
             lv = meta.get(u["id"], 0)
             for i in range(len(u["costs"])):
                 col = C_GOLD if i < lv else (40, 30, 34)

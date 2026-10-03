@@ -5,11 +5,11 @@ from dataclasses import dataclass
 
 # --- Hnízdo (trvalá vylepšení za vejce) -------------------------------------------------
 NEST_UPGRADES = [
-    dict(id="hp", name="Silné kosti", desc="+8 % max. zdraví", icon="hp", step=0.08, costs=[120, 260, 480, 800, 1300]),
+    dict(id="hp", name="Silné kosti", desc="+8 % zdraví", icon="hp", step=0.08, costs=[120, 260, 480, 800, 1300]),
     dict(id="dmg", name="Ostrý zobák", desc="+6 % poškození", icon="dmg", step=0.06, costs=[150, 320, 600, 1000, 1600]),
-    dict(id="speed", name="Běžecký trénink", desc="+4 % rychlost", icon="speed", step=0.04, costs=[100, 220, 420, 700, 1100]),
+    dict(id="speed", name="Trénink", desc="+4 % rychlost", icon="speed", step=0.04, costs=[100, 220, 420, 700, 1100]),
     dict(id="magnet", name="Zrní-radar", desc="+12 % dosah sběru", icon="magnet", step=0.12, costs=[80, 180, 340, 560, 900]),
-    dict(id="xp", name="Moudrost předků", desc="+6 % zkušeností", icon="xp", step=0.06, costs=[140, 300, 560, 920, 1500]),
+    dict(id="xp", name="Moudrost", desc="+6 % zkušeností", icon="xp", step=0.06, costs=[140, 300, 560, 920, 1500]),
     dict(id="reroll", name="Kostka osudu", desc="+1 rerol karet", icon="reroll", step=1, costs=[200, 400, 700, 1100, 1700]),
 ]
 NEST_BY_ID = {u["id"]: u for u in NEST_UPGRADES}

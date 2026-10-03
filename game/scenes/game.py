@@ -46,6 +46,7 @@ def replay_allowed(app, cfg: RunConfig) -> bool:
 
 class GameScene(Scene):
     music = None
+    toast_y = H - 150
 
     def __init__(self, app, cfg: RunConfig) -> None:
         super().__init__(app)
@@ -223,7 +224,8 @@ class GameScene(Scene):
                    "pickupy": len(run.pickups), "spojenci": len(run.allies), "buňky": len(run.grid.cells),
                    "čas": f"{run.time:.1f}", "god": run.god}
             self._debug_grid(surf)
-        if self.run.state not in ("dead", "victory") or self.modal is not None:
+        paused = isinstance(self.overlay, PauseOverlay)
+        if (self.run.state not in ("dead", "victory") or self.modal is not None) and not paused:
             hud.draw_hud(surf, self.run, self.joy, self.t, dbg)
         if self.hint_t > 0 and self.overlay is None and self.run.state == "playing":
             self._hint(surf)

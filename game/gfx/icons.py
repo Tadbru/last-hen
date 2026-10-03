@@ -578,6 +578,7 @@ class IconBank:
         self._scaled: dict[tuple, pygame.Surface] = {}
         for k, (spec, pal) in ICONS.items():
             self.base[k] = pa.build(pa.parse_map(spec), pal)
+        self.base["forward"] = pa.flip(self.base["back"])     # „vpřed“ = zrcadlená šipka zpět (B-44)
         self.icons = self.base
 
     def get(self, name: str, scale: int = 3, evo: bool = False, gray: bool = False) -> pygame.Surface:

@@ -5,6 +5,8 @@ Buňka znaku má 11 řádků: 2 řádky rezerva na akcenty velkých písmen, 7 �
 """
 from __future__ import annotations
 
+import re
+
 import pygame
 
 TOP = 2          # řádky nad tělem (akcenty verzálek)
@@ -154,6 +156,25 @@ def _rows(spec: str) -> list[str]:
     return spec.split("|")
 
 
+_NUM = re.compile(r"^[+\-−]?\d{1,3}$")
+_GROUP = re.compile(r"^\d{3}([.,!?):;]*)$")
+_UNITS = {"s", "s.", "s,", "min", "min.", "px", "HP", "×"}
+NBSP = " "
+
+
+def _glue(words: list[str]) -> list[str]:
+    """Slepí slova, která se nesmí rozdělit na konci řádku (B-43): „40 %“, „1 500“, „20 s“.
+    Spojují se nezlomitelnou mezerou (vykreslí se jako běžná mezera)."""
+    out: list[str] = []
+    for w in words:
+        if out and w and (w.startswith("%") or (_NUM.match(out[-1].split(NBSP)[-1]) and
+                                                 (_GROUP.match(w) or w in _UNITS))):
+            out[-1] = out[-1] + NBSP + w
+        else:
+            out.append(w)
+    return out
+
+
 class BitmapFont:
     def __init__(self) -> None:
         self.glyphs: dict[str, pygame.Surface] = {}
@@ -284,10 +305,18 @@ class BitmapFont:
         surf.blit(img, r)
         return r
 
+    def fit(self, text: str, max_w: int, scale: int = 2) -> str:
+        """Zkrátí text s „…“, aby se vešel do max_w."""
+        if self.width(text, scale) <= max_w:
+            return text
+        while text and self.width(text + "…", scale) > max_w:
+            text = text[:-1]
+        return text.rstrip() + "…"
+
     def wrap(self, text: str, max_w: int, scale: int = 2) -> list[str]:
         lines: list[str] = []
         for para in text.split("\n"):
-            words = para.split(" ")
+            words = _glue(para.split(" "))
             cur = ""
             for w in words:
                 test = w if not cur else cur + " " + w
