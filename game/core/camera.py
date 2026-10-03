@@ -7,6 +7,9 @@ import random
 from ..config import W, H
 
 
+KICK_MAX = 14.0           # max. posun kamery „kickem“ v px
+
+
 class Camera:
     def __init__(self) -> None:
         self.x = 0.0
@@ -20,6 +23,7 @@ class Camera:
         self._t = 0.0
         self.zoom_punch = 0.0
         self.haptics = False      # zapíná GameScene (headless simulace nevibrují)
+        self.vibrations = 0       # počítadlo (diagnostika)
 
     def snap(self, x: float, y: float) -> None:
         self.x, self.y = x, y
@@ -30,22 +34,33 @@ class Camera:
         self.x += (tx + lead_x - self.x) * k
         self.y += (ty + lead_y - self.y) * k
 
-    def shake(self, amount: float) -> None:
-        self.trauma = min(1.0, self.trauma + amount)
+    def shake(self, amount: float, cap: float = 1.0) -> None:
+        """Přidá třes. `cap` = strop, nad který tento zdroj třes nezvedne
+        (vlastní zbraně hráče mají nízký strop, silné otřesy jen bossové)."""
+        if self.trauma < cap:
+            self.trauma = min(cap, self.trauma + amount)
 
     def kick(self, dx: float, dy: float, power: float = 10.0) -> None:
         d = math.hypot(dx, dy) or 1.0
         self.kick_x += dx / d * power
         self.kick_y += dy / d * power
+        m = math.hypot(self.kick_x, self.kick_y)
+        if m > KICK_MAX:
+            self.kick_x *= KICK_MAX / m
+            self.kick_y *= KICK_MAX / m
 
-    def vibrate(self, power: float = 8.0) -> None:
-        """Krátké trhnutí kamerou + haptika telefonu (Android)."""
-        if self.haptics:
-            from ..device import vibrate
-            vibrate(int(10 + power * 2.5))
+    def vibrate(self, power: float = 8.0, cap: float = 0.5) -> None:
+        """Krátké trhnutí kamerou (jen obraz – haptiku telefonu řeší Run.haptic)."""
         a = random.uniform(0, math.tau)
         self.kick(math.cos(a), math.sin(a), power)
-        self.shake(0.25)
+        self.shake(0.25, cap)
+
+    def haptic(self, ms: int) -> None:
+        """Vibrace telefonu – jen při zásahu hráče a úderech bossů (rozestup hlídá device.vibrate)."""
+        if self.haptics:
+            from ..device import vibrate
+            self.vibrations += 1
+            vibrate(ms)
 
     def update(self, dt: float) -> None:
         self._t += dt

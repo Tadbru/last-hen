@@ -44,6 +44,8 @@ HAPTICS = True      # nastavuje App podle Nastavení
 # --- Android přes pyjnius --------------------------------------------------------------------
 _vibrator = None
 _vib_failed = False
+_vib_last = -10.0
+VIB_MIN_GAP = 0.35        # s – telefon nebzučí nepřetržitě ani při sérii výbuchů
 
 
 def _activity():
@@ -53,9 +55,14 @@ def _activity():
 
 def vibrate(ms: int = 30) -> None:
     """Krátká haptická odezva (Android). Na PC nic nedělá."""
-    global _vibrator, _vib_failed
+    global _vibrator, _vib_failed, _vib_last
     if not IS_ANDROID or _vib_failed or not HAPTICS:
         return
+    import time
+    now = time.monotonic()
+    if now - _vib_last < VIB_MIN_GAP:
+        return
+    _vib_last = now
     try:
         if _vibrator is None:
             from jnius import autoclass, cast  # type: ignore

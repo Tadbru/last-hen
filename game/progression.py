@@ -65,6 +65,11 @@ def _candidates(run) -> list[tuple[str, str, float]]:
     return out
 
 
+def has_choices(run) -> bool:
+    """Je co vylepšit? (Pokud ne, levelup se vyřeší automaticky bez přerušení hry.)"""
+    return bool(_candidates(run))
+
+
 def roll_rarity(run) -> int:
     luck = run.player.stats.luck * (2.0 if "lucky" in run.mods else 1.0)
     r = run.rng.random()
@@ -100,10 +105,10 @@ def _card(run, kind: str, cid: str, rarity: int) -> Card:
     raise ValueError(kind)
 
 
+# Výplň, když už není co vylepšovat: jen léčení (jedna karta, žádné duplikáty)
+HEAL_FILL = 0.35
 FILLERS = [
     ("heal", "Kuřecí polévka", "Vyléčí 35 % zdraví. Babička by měla radost.", "heart"),
-    ("coins", "Pytel mincí", "+20 mincí (na konci se změní ve vejce).", "coin"),
-    ("crow", "Hrdlo jako zvon", "Kokrhání se okamžitě nabije o polovinu.", "crow"),
 ]
 
 
@@ -138,11 +143,7 @@ def apply_card(run, card: Card) -> None:
     elif card.kind == "passive":
         run.add_passive(card.id, card.to - card.cur)
     elif card.kind == "heal":
-        run.player.heal(run.player.stats.max_hp * 0.35)
-    elif card.kind == "coins":
-        run.coins += 20
-    elif card.kind == "crow":
-        run.crow_charge = min(1.0, run.crow_charge + 0.5)
+        run.player.heal(run.player.stats.max_hp * HEAL_FILL)
     run.pending_levelups = max(0, run.pending_levelups - 1)
     run.resume()
 
@@ -284,7 +285,8 @@ def apply_results(save, run, rewards: dict) -> list[str]:
     if run.biome.id not in d["played_biomes"]:
         d["played_biomes"].append(run.biome.id)
     # rubber-banding
-    d["rubber_band"] = (not run.victory) and run.time < 90
+    # rubber-banding jen po skutečné brzké smrti (ne po „Vzdát se“)
+    d["rubber_band"] = (not run.victory) and (not run.gave_up) and run.player.dead and run.time < 90
     # sbírka
     for cat, items in run.discovered.items():
         for it in items:
@@ -413,6 +415,14 @@ def daily_spec(day: _dt.date | None = None) -> dict:
     )
 
 
+def daily_date(seed: int) -> str:
+    """Datum denní výzvy z jejího seedu (YYYYMMDD); při neplatném seedu dnešek."""
+    try:
+        return _dt.datetime.strptime(str(int(seed)), "%Y%m%d").date().isoformat()
+    except (ValueError, TypeError):
+        return today().isoformat()
+
+
 def daily_leaderboard(save, spec: dict) -> list[tuple[str, int, bool]]:
     import random as _r
     rng = _r.Random(spec["seed"] * 7 + 1)
@@ -446,6 +456,17 @@ def season_for(day: _dt.date | None, setting: str) -> str | None:
     return None
 
 
+def skin_usable(save, skin_id: str | None) -> bool:
+    """Skin lze nosit, pokud ho hráč vlastní, nebo je to sezónní skin a právě běží jeho skutečná sezóna
+    (podle data – vynucená sezóna v Nastavení mění jen vzhled světa, ne odemčení skinů)."""
+    if not skin_id:
+        return False
+    if skin_id in save["skins_owned"]:
+        return True
+    s = M.SKIN_BY_ID.get(skin_id)
+    return bool(s and s["season"] and s["season"] == season_for(None, "auto"))
+
+
 def daily_login(save) -> dict | None:
     """Vrátí odměnu, pokud je dnes první přihlášení."""
     d = save.data["daily"]
@@ -457,6 +478,8 @@ def daily_login(save) -> dict | None:
         last_day = _dt.date.fromisoformat(last) if last else None
     except ValueError:
         last_day = None
+    if last_day and t < last_day:
+        return None          # hodiny posunuté zpátky – žádná odměna, série zůstává
     if last_day and (t - last_day).days == 1:
         d["login_streak"] = d.get("login_streak", 0) + 1
     else:

@@ -22,11 +22,16 @@ class ResultsScene(Scene):
         self.rewards = progression.compute_rewards(run)
         self.msgs = progression.apply_results(app.save, run, self.rewards)
         self.doubled = False
+        self._page = 0
+        self._page_t = 0.0
+        self._pages_cache = None
         self.score = progression.score(run)
         if run.cfg.mode == "daily":
             d = app.save["daily"]
-            d["last_played"] = progression.today().isoformat()
-            d["scores"].append({"date": progression.today().isoformat(), "score": self.score, "char": run.char.id})
+            # datum výzvy podle seedu runu – výsledek dohraný po půlnoci patří ke dni, kdy výzva začala,
+            # a nezablokuje výzvu nového dne (last_played se nastavuje už při startu)
+            day = progression.daily_date(run.cfg.seed)
+            d["scores"].append({"date": day, "score": self.score, "char": run.char.id})
             d["scores"] = d["scores"][-40:]
             app.save["tokens"] += 1
             self.msgs.insert(0, "Denní výzva: +1 žeton")
@@ -50,15 +55,48 @@ class ResultsScene(Scene):
                                        icon="star", style="blue", sub="obrázek PNG"))
         self.add(Button((30, H - 72, W - 60, 60), "Menu", self.back, icon="back", style="secondary"))
         if run.cfg.mode == "daily":
-            self.b_again.text = "NOVÝ RUN"
+            self.b_again.text = "VÝBĚR"
         assets.audio.play("victory" if self.victory else "coin")
 
+    def _msg_pages(self, font, w: int, h: int) -> list[list[str]]:
+        if getattr(self, "_pages_cache", None) is not None:
+            return self._pages_cache
+        per = max(1, h // font.line_h(2))
+        pages: list[list[str]] = []
+        cur: list[str] = []
+        for m in self.msgs:
+            lines = font.wrap(m, w, 2)
+            if cur and len(cur) + len(lines) > per:
+                pages.append(cur)
+                cur = []
+            cur.extend(lines[:per])
+        if cur:
+            pages.append(cur)
+        self._pages_cache = pages
+        return pages
+
+    def on_up(self, ev) -> None:
+        area = getattr(self, "_msg_area", None)
+        if area is not None and area.collidepoint(ev.x, ev.y):
+            self._page += 1
+            self._page_t = 0.0
+
+    def update(self, dt: float) -> None:
+        super().update(dt)
+        self._page_t += dt
+        if self._page_t > 4.0:
+            self._page_t = 0.0
+            self._page += 1
+
     def again(self) -> None:
-        from .game import GameScene, build_config
+        from .game import GameScene, build_config, replay_allowed
         c = self.run.cfg
-        mode = c.mode if c.mode != "daily" else "quick"
-        mods = c.modifiers if c.mode != "daily" else ()
-        self.app.switch(GameScene(self.app, build_config(self.app, c.character, c.biome, mode, c.difficulty, mods)))
+        if not replay_allowed(self.app, c):
+            from .select import SelectScene
+            self.app.switch(SelectScene(self.app))
+            return
+        self.app.switch(GameScene(self.app, build_config(self.app, c.character, c.biome, c.mode, c.difficulty,
+                                                         c.modifiers)))
 
     def ad_double(self) -> None:
         if self.doubled:
@@ -145,11 +183,17 @@ class ResultsScene(Scene):
             gx = tx - 70
             surf.blit(g, (gx, rr.bottom - 40))
             font.draw(surf, f"+{self.rewards['gold']}", (gx + g.get_width() + 6, rr.bottom - 38), C_GOLD, 2, "topleft")
-        # zprávy
-        y = rr.bottom + 10
-        for m in self.msgs[:3]:
-            font.draw(surf, m, (W // 2, y), (140, 255, 160), 1 if font.width(m, 2) > W - 40 else 2, "midtop",
-                      outline=C_OUTLINE)
-            y += 22
+        # zprávy (odemčení, výzvy) – po stránkách, ať se žádná neztratí
+        self._msg_area = pygame.Rect(16, rr.bottom + 8, W - 32, self.b_again.rect.y - rr.bottom - 14)
+        pages = self._msg_pages(font, self._msg_area.w, self._msg_area.h - 14)
+        if pages:
+            page = pages[self._page % len(pages)]
+            y = self._msg_area.y
+            for ln in page:
+                font.draw(surf, ln, (W // 2, y), (140, 255, 160), 2, "midtop", outline=C_OUTLINE)
+                y += font.line_h(2)
+            if len(pages) > 1:
+                font.draw(surf, f"klepni pro další · {self._page % len(pages) + 1}/{len(pages)}",
+                          (W // 2, self._msg_area.bottom), (200, 190, 210), 1, "midbottom")
         self.draw_buttons(surf)
         self.draw_overlays(surf)

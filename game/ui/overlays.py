@@ -28,7 +28,14 @@ class Overlay:
         self._pressed = None
         self.done = False
 
+    lock = 0.0       # s po otevření, kdy se ignorují dotyky (ochrana proti náhodnému klepnutí)
+
     def handle(self, ev) -> None:
+        if ev.type in ("down", "up") and self.t < self.lock:
+            if self._pressed is not None:
+                self._pressed.pressed = False
+                self._pressed = None
+            return
         if ev.type == "down":
             for b in self.buttons:
                 if b.contains(ev.x, ev.y) and b.enabled:
@@ -79,9 +86,12 @@ class Overlay:
 # ---------------------------------------------------------------------------------------------
 class LevelUpOverlay(Overlay):
     CARD_H = 176
+    lock = 0.6       # palec často zrovna drží joystick ve spodní části obrazovky
+    SKIP_CONFIRM = 2.5
 
     def __init__(self, scene) -> None:
         super().__init__(scene)
+        self.skip_arm = 0.0
         self.banish_mode = False
         self.offer_id = None
         self.hover = -1
@@ -100,11 +110,21 @@ class LevelUpOverlay(Overlay):
         self.b_reroll.enabled = r.rerolls > 0
         self.b_skip.sub = f"+{5 + r.level // 2} mincí"
         self.b_banish.sub = f"zbývá {r.banishes}"
-        self.b_banish.enabled = r.banishes > 0
+        self.b_banish.enabled = r.banishes > 0 and any(c.kind in ("weapon", "passive") for c in (r.offer or []))
+        if not self.b_banish.enabled:
+            self.banish_mode = False
         self.b_banish.pulse = self.banish_mode
         if id(r.offer) != self.offer_id:
             self.offer_id = id(r.offer)
             self.t = 0.0
+            self.skip_arm = 0.0
+        if self.skip_arm > 0:
+            self.b_skip.text = "Opravdu?"
+            self.b_skip.sub = "klepni znovu"
+            self.b_skip.pulse = True
+        else:
+            self.b_skip.text = "Skip"
+            self.b_skip.pulse = False
 
     def _reroll(self) -> None:
         if progression.reroll(self.run):
@@ -112,6 +132,12 @@ class LevelUpOverlay(Overlay):
             assets.audio.play("teleport", 0.4)
 
     def _skip(self) -> None:
+        # Skip zahodí celý levelup – musí se potvrdit druhým klepnutím
+        if self.skip_arm <= 0:
+            self.skip_arm = self.SKIP_CONFIRM
+            self._sync()
+            return
+        self.skip_arm = 0.0
         progression.skip(self.run)
         assets.audio.play("coin")
 
@@ -127,6 +153,10 @@ class LevelUpOverlay(Overlay):
             return
         card = offer[i]
         if self.banish_mode:
+            if card.kind not in ("weapon", "passive"):
+                self.scene.toast("Tuhle kartu nejde vyřadit", (255, 160, 140), 1.8)
+                assets.audio.play("back")
+                return
             if progression.banish(self.run, card):
                 assets.audio.play("back")
                 self.banish_mode = False
@@ -164,6 +194,8 @@ class LevelUpOverlay(Overlay):
 
     def update(self, dt: float) -> None:
         super().update(dt)
+        if self.skip_arm > 0:
+            self.skip_arm = max(0.0, self.skip_arm - dt)
         self._sync()
 
     def draw(self, surf) -> None:
@@ -240,7 +272,7 @@ class ChestOverlay(Overlay):
         super().__init__(scene)
         self.reward = self.run.chest_reward
         self.opened = False
-        self.b_ok = Button((W // 2 - 140, H - 160, 280, 80), "Pokračovat", self._close, style="primary",
+        self.b_ok = Button((W // 2 - 140, H - 104, 280, 80), "Pokračovat", self._close, style="primary",
                            key=pygame.K_RETURN)
         self.b_ok.visible = False
         self.buttons = [self.b_ok]
@@ -294,26 +326,41 @@ class ChestOverlay(Overlay):
                    (cx + math.cos(a + 0.15) * 600, 280 + math.sin(a + 0.15) * 600)]
             pygame.draw.polygon(rays, col, pts)
         surf.blit(rays, (0, 20))
-        img = assets.icons.get("chest", 8)
-        surf.blit(img, img.get_rect(center=(cx, 200)))
-        font.draw(surf, "EVOLUCE!" if evo else "Poklad!", (cx, 90), (255, 140, 255) if evo else C_GOLD, 5, "midtop",
+        img = assets.icons.get("chest", 6)
+        surf.blit(img, img.get_rect(center=(cx, 168)))
+        font.draw(surf, "EVOLUCE!" if evo else "Poklad!", (cx, 56), (255, 140, 255) if evo else C_GOLD, 5, "midtop",
                   outline=C_OUTLINE)
-        y = 290
-        for i, (icon, name, sub, is_evo) in enumerate(self.reward["items"] if self.reward else []):
+        if self.reward:
+            font.draw(surf, f"+{self.reward['coins']} mincí", (cx, 206), C_GOLD, 3, "midtop", outline=C_OUTLINE)
+        items = self.reward["items"] if self.reward else []
+        n = max(1, len(items))
+        y0, y1, gap = 252, self.b_ok.rect.y - 14, 10
+        row_h = int(min(150, (y1 - y0) / n - gap))
+        y = y0
+        for i, (icon, name, sub, is_evo) in enumerate(items):
             k = ease_out_back(max(0.0, min(1.0, (self.t - 1.1 - i * 0.25) * 4)))
             if k <= 0:
+                y += row_h + gap
                 continue
-            r = pygame.Rect(40, y, W - 80, 96)
+            r = pygame.Rect(30, y, W - 60, row_h)
             r.x += int((1 - k) * 200)
             draw_panel(surf, r, (90, 60, 30) if is_evo else (64, 48, 74), border=(255, 200, 60) if is_evo else C_OUTLINE)
-            draw_icon_frame(surf, (r.x + 12, r.y + 10, 76, 76), icon, evo=is_evo, scale=5)
-            font.draw(surf, name, (r.x + 100, r.y + 14), (255, 240, 200), 3, "topleft", outline=C_OUTLINE)
-            lines = font.wrap(sub, r.w - 112, 2)[:2]
-            for j, ln in enumerate(lines):
-                font.draw(surf, ln, (r.x + 100, r.y + 50 + j * 22), (230, 220, 240), 2, "topleft")
-            y += 108
-        if self.reward:
-            font.draw(surf, f"+{self.reward['coins']} mincí", (cx, y + 10), C_GOLD, 3, "midtop", outline=C_OUTLINE)
+            fs = min(76, row_h - 20)
+            draw_icon_frame(surf, (r.x + 10, r.y + (row_h - fs) // 2, fs, fs), icon, evo=is_evo, scale=5 if fs >= 70 else 4)
+            tx = r.x + fs + 22
+            tw = r.right - tx - 10
+            name_sc = 3 if row_h >= 100 and font.width(name, 3) <= tw else 2
+            font.draw(surf, name, (tx, r.y + 10), (255, 240, 200), name_sc, "topleft", outline=C_OUTLINE)
+            ty = r.y + 14 + font.line_h(name_sc)
+            # popis: raději menší písmo než useknutý text
+            for sc in (2, 1):
+                lines = font.wrap(sub, tw, sc)
+                cap = max(1, (r.bottom - 6 - ty) // font.line_h(sc))
+                if len(lines) <= cap or sc == 1:
+                    break
+            for j, ln in enumerate(lines[:cap]):
+                font.draw(surf, ln, (tx, ty + j * font.line_h(sc)), (230, 220, 240), sc, "topleft")
+            y += row_h + gap
         super().draw(surf)
 
 
@@ -353,12 +400,22 @@ class PauseOverlay(Overlay):
         self._sync()
 
     def _quit(self) -> None:
-        self.done = True
-        self.scene.give_up()
+        from ..scenes.base import Dialog
+
+        def do():
+            self.done = True
+            self.scene.give_up()
+        self.scene.modal = Dialog("Vzdát se?", "Run skončí a dostaneš odměnu za dosavadní výkon.",
+                                  [("Vzdát se", do, "danger"), ("Hrát dál", None, "primary")], icon="skull")
 
     def _restart(self) -> None:
-        self.done = True
-        self.scene.restart()
+        from ..scenes.base import Dialog
+
+        def do():
+            self.done = True
+            self.scene.restart()
+        self.scene.modal = Dialog("Začít znovu?", "Rozehraný run se zahodí bez odměny.",
+                                  [("Restart", do, "danger"), ("Hrát dál", None, "primary")], icon="reroll")
 
     def on_key(self, key) -> None:
         if key == pygame.K_p:

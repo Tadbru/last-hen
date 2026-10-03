@@ -27,15 +27,15 @@ class SettingsScene(Scene):
         self.toggles = []
         for key, label in (("music_on", "Hudba zapnutá"), ("sfx_on", "Zvuky zapnuté"),
                            ("damage_numbers", "Čísla poškození"), ("screen_shake", "Otřesy obrazovky"),
-                           ("show_fps", "Ukazovat FPS"),
+                           ("flashes", "Záblesky obrazovky"), ("show_fps", "Ukazovat FPS"),
                            ("vibration", "Vibrace") if device.MOBILE else ("fullscreen", "Celá obrazovka")):
-            b = self.add(Button((W - 190, y, 170, 64), "", lambda k=key: self.toggle(k), scale=2))
+            b = self.add(Button((W - 190, y, 170, 58), "", lambda k=key: self.toggle(k), scale=2))
             self.toggles.append((key, label, y, b))
-            y += 74
-        self.b_season = self.add(Button((W - 250, y, 230, 64), "", self.cycle_season, scale=2))
+            y += 66
+        self.b_season = self.add(Button((W - 250, y, 230, 58), "", self.cycle_season, scale=2))
         self.season_y = y
-        y += 90
-        self.add(Button((30, y, W - 60, 70), "Smazat postup", self.reset, icon="skull", style="danger"))
+        y += 80
+        self.add(Button((30, y, W - 60, 64), "Smazat postup", self.reset, icon="skull", style="danger"))
         self._sync()
         _ = st
 
@@ -98,8 +98,8 @@ class SettingsScene(Scene):
             draw_bar(surf, (34, y + 40, W - 240, 12), st[key], (234, 150, 40))
             font.draw(surf, f"{int(st[key] * 100)} %", (W - 196, y + 8), (220, 210, 230), 2, "topright")
         for key, label, y, b in self.toggles:
-            font.draw(surf, label, (34, y + 32), C_TEXT, 2, "midleft")
-        font.draw(surf, "Sezónní téma", (34, self.season_y + 32), C_TEXT, 2, "midleft")
+            font.draw(surf, label, (34, y + 29), C_TEXT, 2, "midleft")
+        font.draw(surf, "Sezónní téma", (34, self.season_y + 29), C_TEXT, 2, "midleft")
         tip = ("Tlačítko Zpět = pauza / návrat" if device.MOBILE
                else "F3 debug · F11 celá obrazovka · mezerník = kokrhání")
         font.draw(surf, tip, (W // 2, 930), (150, 140, 160), 1, "midtop")

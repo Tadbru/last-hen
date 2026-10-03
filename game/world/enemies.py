@@ -164,6 +164,8 @@ def update_enemies(run, dt: float) -> None:
                 p.take_damage(e.dmg, e.x, e.y, "kontakt")
             if slide_hit and d2 < (rr + 6) * (rr + 6) and e.touch_cd <= 0:
                 e.touch_cd = 0.35
-                run.damage_enemy(e, 18 * p.stats.might, None, -nx, -ny, 260)
+                # škáluje s HP nepřítele (jako kokrhání), jinak by pasivka od 3. minuty nic nedělala
+                run.damage_enemy(e, 18 * p.stats.might + e.max_hp * (0.04 if e.elite else 0.15), None,
+                                 -nx, -ny, 260)
         if e.touch_cd > 0:
             e.touch_cd -= dt

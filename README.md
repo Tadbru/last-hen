@@ -34,7 +34,7 @@ automaticky otestuje hru a sestaví **Android aplikaci (APK)**. Hotové APK se o
 
 Na telefonu: ovládání palcem (táhni ve spodních 2/3 obrazovky), kokrhání velkým tlačítkem vpravo dole,
 systémové tlačítko Zpět = pauza / návrat, při odchodu z aplikace se hra sama pozastaví a uloží.
-Hra telefonem při úderech bossů zavibruje (lze vypnout v Nastavení) a „Sdílet výsledek“ uloží obrázek do Galerie
+Hra telefonem zavibruje při zásahu slepice a při úderech bossů (lze vypnout v Nastavení) a „Sdílet výsledek“ uloží obrázek do Galerie
 a otevře systémové sdílení.
 
 **iPhone / iOS:** Apple nedovoluje instalovat aplikace stažené z GitHubu – jen přes App Store / TestFlight,

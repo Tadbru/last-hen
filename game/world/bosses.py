@@ -150,12 +150,13 @@ class SpyFox(BossCtrl):
             if self.st <= 0:
                 self.state = "recover"
                 self.st = 0.9
-                # vějíř šipek
+                # vějíř šipek – nejdřív varovné čáry, pak výstřel
                 base = math.atan2(ny, nx)
                 for i in range(-1, 2):
                     a = base + i * 0.25
-                    run.eprojs.append(EProj(e.x, e.y - 20, math.cos(a) * 260, math.sin(a) * 260, 7, e.dmg * 0.7, 2.0,
-                                            assets.sprites.small["feather"], 1))
+                    run.telegraphs.append(Telegraph("line", e.x, e.y - 20, 0, 0.45, _fire_line(run, 260, 7, e.dmg * 0.7,
+                                                    "feather", 1), x2=e.x + math.cos(a) * 360,
+                                                    y2=e.y - 20 + math.sin(a) * 360, w=10, color=(255, 120, 80)))
         elif self.state == "recover":
             self.st -= dt
             self.move(nx * e.speed * 0.3, ny * e.speed * 0.3, dt)
@@ -244,6 +245,7 @@ class ZombieBear(BossCtrl):
         run.sfx("stomp")
         run.shake(0.6)
         run.camera.vibrate(12)
+        run.camera.haptic(60)
         p = run.player
         if (p.x - tel.x) ** 2 + (p.y - tel.y) ** 2 < (tel.r + p.r) ** 2:
             p.take_damage(self.e.dmg * 1.3, tel.x, tel.y, "boss-útok")
@@ -281,7 +283,8 @@ class WolfAlpha(BossCtrl):
                 n = 6 if e.hp > e.max_hp * 0.5 else 9
                 for i in range(n):
                     a = i * TAU / n
-                    run.spawn_enemy("wolf", p.x + math.cos(a) * 330, p.y + math.sin(a) * 330, summoned=True)
+                    # smečka přibíhá zpoza okraje obrazovky (elipsa kolem viditelné plochy)
+                    run.spawn_enemy("wolf", p.x + math.cos(a) * 330, p.y + math.sin(a) * 540, summoned=True)
             self.cd -= dt
             if self.cd <= 0:
                 self.state = "aim"
@@ -318,6 +321,7 @@ class ZombieRooster(BossCtrl):
         ph = bdef.phase_hp
         self.thresholds = [total * (1 - ph[0]), total * (1 - ph[0] - ph[1])]
         self.wind = 0.0
+        self.inhale = 0.0
         self.rain_t = 0.0
         self.small = e.spr
         self.big = run.boss_sprite("zombie_rooster_big", variant.get("tint"))
@@ -370,9 +374,12 @@ class ZombieRooster(BossCtrl):
         self.state = "transition"
         self.st = 1.6
         self.wind = 0.0
+        self.inhale = 0.0
+        self.e.bob = 0
         run.sfx("roar")
         run.shake(0.5)
         run.camera.vibrate(14)
+        run.camera.haptic(70)
         line = self.b.lines[1] if ph == 2 else self.b.lines[2]
         run.say(e, line, 2.5)
         run.banner(f"FÁZE {ph}", (255, 120, 60), 1.5)
@@ -387,9 +394,23 @@ class ZombieRooster(BossCtrl):
         run, e = self.run, self.e
         nx, ny, d = self.to_player()
         p = self.p
+        if self.inhale > 0:
+            # nádech před kokrháním – stojí, kruh varuje
+            self.inhale -= dt
+            e.bob = -abs(math.sin(self.inhale * 14)) * 4
+            if self.inhale <= 0:
+                e.bob = 0
+                self.wind = WIND_TIME
+                run.sfx("crow", 1.0)
+                run.say(e, "KIKIRIKÍÍÍ!", 1.6)
+                run.add_wave(e.x, e.y, 20, 210, 0.5, 0, None, color=(255, 120, 90), hurt_player=e.dmg * 0.6)
+                run.shake(0.3)
+            return
         if self.wind > 0:
             self.wind -= dt
-            push = (220 if not self.enraged else 280) * (0.7 if run.director.quick else 1.0)
+            # vítr je pomalejší než nejpomalejší zvíře → proti němu se dá ujít; plynulý náběh
+            push = (WIND_PUSH if not self.enraged else WIND_PUSH * 1.15) * (0.85 if run.director.quick else 1.0)
+            push *= min(1.0, (WIND_TIME - self.wind) / 0.5)
             p.x += nx * push * dt
             p.y += ny * push * dt
             if run.tick % 2 == 0:
@@ -404,11 +425,8 @@ class ZombieRooster(BossCtrl):
         self.cd -= dt
         if self.cd <= 0:
             self.cd = run.rng.uniform(5.5, 7.0)
-            self.wind = 2.6
-            run.sfx("crow", 1.0)
-            run.say(e, "KIKIRIKÍÍÍ!", 1.6)
-            run.add_wave(e.x, e.y, 20, 210, 0.5, 0, None, color=(255, 120, 90), hurt_player=e.dmg * 0.6)
-            run.shake(0.3)
+            self.inhale = 0.8
+            run.telegraphs.append(Telegraph("circle", e.x, e.y, 210, 0.8, color=(255, 150, 90)))
 
     # fáze 2: déšť zombie slepic
     def _phase2(self, dt: float) -> None:
@@ -439,7 +457,7 @@ class ZombieRooster(BossCtrl):
                     run.particles.puff(tel.x, tel.y, 5, (200, 220, 190), 80)
                     if len(run.enemies) < 380:
                         run.spawn_enemy(rain, tel.x, tel.y, summoned=True)
-                run.telegraphs.append(Telegraph("drop", x, y, 24, 0.9, fall, color=(170, 255, 120)))
+                run.telegraphs.append(Telegraph("drop", x, y, 24, 0.9, fall, color=(170, 255, 120), data=rain))
         self.cd -= dt
         if self.cd <= 0:
             self.cd = 3.0
@@ -447,8 +465,9 @@ class ZombieRooster(BossCtrl):
             base = math.atan2(ny, nx)
             for i in range(-3, 4):
                 a = base + i * 0.18
-                run.eprojs.append(EProj(e.x, e.y - 30, math.cos(a) * 240, math.sin(a) * 240, 9, e.dmg * 0.6, 2.4,
-                                        assets.sprites.small["egg"], 3))
+                run.telegraphs.append(Telegraph("line", e.x, e.y - 30, 0, 0.55, _fire_line(run, 240, 9, e.dmg * 0.6,
+                                                "egg", 3), x2=e.x + math.cos(a) * 420,
+                                                y2=e.y - 30 + math.sin(a) * 420, w=12, color=(255, 200, 120)))
             run.sfx("throw", 0.6)
 
     # fáze 3: obří rychlá forma – nájezdy
@@ -486,6 +505,20 @@ class ZombieRooster(BossCtrl):
 
     def on_death(self) -> None:
         super().on_death()
+
+
+WIND_PUSH = 115.0     # px/s – pod rychlostí nejpomalejšího zvířete (husa ~132)
+WIND_TIME = 2.6
+
+
+def _fire_line(run, speed: float, r: float, dmg: float, sprite: str, kind: int):
+    """Callback telegrafu „line“: vystřelí projektil z počátku čáry jejím směrem."""
+    def cb(tel):
+        dx, dy = tel.x2 - tel.x, tel.y2 - tel.y
+        d = math.hypot(dx, dy) or 1.0
+        run.eprojs.append(EProj(tel.x, tel.y, dx / d * speed, dy / d * speed, r, dmg, 2.4,
+                                assets.sprites.small[sprite], kind))
+    return cb
 
 
 def _seg_dist(px, py, x1, y1, x2, y2) -> float:

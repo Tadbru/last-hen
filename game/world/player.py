@@ -126,6 +126,8 @@ class Player:
                 else:
                     self.slide = max(0.0, self.slide - dt * 3.0 * (1.2 - dot))
                 speed *= 1 + 0.6 * self.slide
+                if self.slide > 0.55 and int(run.time * 30) % 2 == 0:
+                    run.particles.emit(self.x - self.vx * 0.05, self.y + 6, 0, 0, 0.3, 2, (230, 240, 255), 6)
             if not self.moving:
                 self.sq_v -= 2.5     # začátek pohybu – stretch
             self.dir_x, self.dir_y = nx, ny
@@ -155,12 +157,16 @@ class Player:
         self.y += (self.vy + py) * dt
         run.map.collide_circle(self, self.r)
         run.clamp_to_arena(self)
-        if self.vx > 8:
-            self.face = 0
-        elif self.vx < -8:
-            self.face = 1
+        # otočení podle směru, kam hráč táhne (na ledu se tělo nesmí „dívat“ směrem klouzání)
+        if moving and abs(mx) > 0.15:
+            self.face = 0 if mx > 0 else 1
+        elif not moving:
+            if self.vx > 8:
+                self.face = 0
+            elif self.vx < -8:
+                self.face = 1
         sp = math.hypot(self.vx, self.vy)
-        self.moving = sp > 20
+        self.moving = sp > 20 and moving      # nohy běží jen při skutečné chůzi, ne při klouzání bez vstupu
         if self.moving:
             self.anim += dt * (6 + sp / 40)
         # squash & stretch pružina
@@ -203,6 +209,7 @@ class Player:
         run.sfx("cluck_hurt", 0.8)
         run.particles.feathers(self.x, self.y - 10, 6, (250, 248, 240), 140)
         run.shake(0.28)
+        run.camera.haptic(30)
         if sx is not None:
             run.camera.kick(self.x - sx, self.y - sy, 7)
             dx, dy = self.x - sx, self.y - sy

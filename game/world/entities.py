@@ -169,9 +169,9 @@ class Ring:
 
 class Telegraph:
     """Varovná značka na zemi. Po vypršení zavolá callback (např. dopad útoku)."""
-    __slots__ = ("kind", "x", "y", "r", "x2", "y2", "w", "t", "dur", "color", "cb", "alive")
+    __slots__ = ("kind", "x", "y", "r", "x2", "y2", "w", "t", "dur", "color", "cb", "alive", "data")
 
-    def __init__(self, kind, x, y, r, dur, cb=None, x2=0.0, y2=0.0, w=0.0, color=(255, 60, 60)):
+    def __init__(self, kind, x, y, r, dur, cb=None, x2=0.0, y2=0.0, w=0.0, color=(255, 60, 60), data=None):
         self.kind = kind
         self.x, self.y, self.r = x, y, r
         self.x2, self.y2, self.w = x2, y2, w
@@ -180,6 +180,7 @@ class Telegraph:
         self.color = color
         self.cb = cb
         self.alive = True
+        self.data = data       # např. id nepřítele, který padá z nebe
 
 
 class FloatText:

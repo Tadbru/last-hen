@@ -29,6 +29,8 @@ from .mapgen import WorldMap
 from .player import Player
 
 ARENA_R = 430.0
+FLASH_GAP = 2.0            # min. rozestup běžných záblesků (s)
+PLAYER_FX_CAP = 0.3        # strop třesu od vlastních zbraní (offset ≈ 1 px)
 CROW_KILLS = 70
 
 
@@ -116,9 +118,10 @@ class Run:
         self.particles = ParticleSystem(MAX_PARTICLES)
         self.director = Director(self)
 
-        self.level = 1
+        # bonusové levelupy (boss rush, rubber-banding) zvednou úroveň hned – overlay pak ukazuje 2, 3, …
+        self.level = 1 + max(0, cfg.bonus_levels)
         self.xp = 0.0
-        self.xp_next = self.xp_needed(1)
+        self.xp_next = self.xp_needed(self.level)
         self.pending_levelups = cfg.bonus_levels
         self.pending_chests: list[str] = []
         self.offer = None
@@ -149,7 +152,11 @@ class Run:
         self.speech: list[list] = []   # [entity, text, t, dead]
         self.flash_t = 0.0
         self.flash_col = (255, 255, 255)
+        self.flash_cd = 0.0
+        self.flash_count = 0
+        self.flashes_on = True
         self.revived = False
+        self.gave_up = False
         self.victory = False
         self.result = None
         self.show_damage = True
@@ -174,10 +181,17 @@ class Run:
         if not self.headless and assets.audio is not None:
             assets.audio.play(name, vol)
 
-    def shake(self, amount: float) -> None:
-        self.camera.shake(amount)
+    def shake(self, amount: float, cap: float = 1.0) -> None:
+        self.camera.shake(amount, cap)
 
-    def flash(self, color, dur: float = 0.1) -> None:
+    def flash(self, color, dur: float = 0.1, important: bool = False) -> None:
+        """Záblesk přes obrazovku. Lze vypnout v Nastavení; běžné záblesky max. 1× za FLASH_GAP s."""
+        if not self.flashes_on:
+            return
+        if not important and self.flash_cd > 0:
+            return
+        self.flash_cd = FLASH_GAP
+        self.flash_count += 1
         self.flash_col = color
         self.flash_t = max(self.flash_t, dur)
 
@@ -242,7 +256,7 @@ class Run:
         self.weapons[idx] = nw
         self.discovered["evolutions"].add(nw.id)
         self.banner(f"EVOLUCE: {nw.d.name}!", (255, 214, 70), 2.5)
-        self.flash((255, 240, 180), 0.2)
+        self.flash((255, 240, 180), 0.2, important=True)
         self.sfx("fanfare")
         self.camera.vibrate(10)
 
@@ -273,6 +287,10 @@ class Run:
         if "giants" in self.mods and not d.elite:
             e.r *= 1.25
         self.enemies.append(e)
+        if not self.headless and self.camera.on_screen(x, y, -10):
+            # objevení přímo na obrazovce (okraj arény, vyvolání) – vylézt z hlíny, ne se „zhmotnit“
+            self.particles.puff(x, y + 6, 4, (120, 96, 72), 50, 10)
+            self.add_ring(x, y + 4, 4, e.r * 1.6, 0.35, (170, 120, 210), 3)
         return e
 
     def spawn_prop(self, x: float, y: float, ref):
@@ -312,9 +330,18 @@ class Run:
             # aréna kolem hráče
             self.arena = (p.x, p.y, ARENA_R)
             for e in self.enemies:
-                if (e.x - p.x) ** 2 + (e.y - p.y) ** 2 > (ARENA_R - 20) ** 2:
-                    e.alive = False
-                    self.particles.puff(e.x, e.y, 2, (200, 200, 200))
+                dx, dy = e.x - p.x, e.y - p.y
+                d2 = dx * dx + dy * dy
+                if d2 > (ARENA_R - 20) ** 2:
+                    if e.boss:
+                        # rozpracovaný mini-boss se přenese do arény (dřív zmizel a „visel“ v seznamu bossů)
+                        d = math.sqrt(d2) or 1.0
+                        e.x = p.x + dx / d * (ARENA_R - 90)
+                        e.y = p.y + dy / d * (ARENA_R - 90)
+                        e.alpha = 255
+                    else:
+                        e.alive = False
+                        self.particles.puff(e.x, e.y, 2, (200, 200, 200))
             a = -math.pi / 2
             x, y = p.x, p.y - 300
         else:
@@ -353,6 +380,7 @@ class Run:
         self.sfx("roar")
         self.shake(0.5)
         self.camera.vibrate(12)
+        self.camera.haptic(80)
 
     def boss_killed(self, ctrl) -> None:
         e = ctrl.e
@@ -365,9 +393,10 @@ class Run:
             self.bosses.remove(ctrl)
         self.explosion(e.x, e.y, 120, 0, None, (255, 220, 120), big=True)
         self.particles.feathers(e.x, e.y, 40, (255, 240, 220), 300)
-        self.flash((255, 255, 255), 0.15)
+        self.flash((255, 255, 255), 0.15, important=True)
         self.shake(0.8)
         self.camera.vibrate(16)
+        self.camera.haptic(120)
         self.coins += 25 if bid != "zombie_rooster" else 100
         if ctrl is self.final_boss or (self.cfg.mode == "bossrush" and not self.director.rush and not self.bosses):
             self.final_boss = None
@@ -375,6 +404,12 @@ class Run:
             self.state = "victory_anim"
             self.state_t = 3.0
             self.victory = True
+            # dobíhající útoky po vítězství zrušit (dřív mohly hráče zabít během vítězné animace)
+            self.telegraphs = []
+            self.bombs = []
+            self.eprojs = []
+            self.waves = [w for w in self.waves if not w.hurt_player]
+            self.player.invuln = 999.0
             self.sfx("victory")
             self.banner("SLUNCE VYCHÁZÍ!", (255, 220, 120), 3.0)
         else:
@@ -523,7 +558,7 @@ class Run:
             self.shake(0.3)
         self.sfx("plop", 0.5)
         if self.kills % 3 == 0:
-            self.shake(0.035)
+            self.shake(0.035, 0.2)
 
     def area_damage(self, x: float, y: float, r: float, dmg: float, src, kb: float = 0.0, slow: float = 0.0,
                     slow_t: float = 1.2, stun: float = 0.0, freeze: float = 0.0, crit: bool = True,
@@ -560,9 +595,13 @@ class Run:
         self.particles.sparks(x, y, n, color, 260 if not big else 420)
         self.particles.puff(x, y, n // 2, (90, 80, 80) if not big else (120, 100, 90), 70, 12)
         self.sfx("nuke" if big else "explode", 0.7 if not big else 1.0)
-        self.shake(0.12 if not big else 0.55)
-        if big:
-            self.camera.vibrate(10)
+        if src is not None:
+            # výbuch vlastní zbraně: jen jemné cuknutí, žádná vibrace
+            self.shake(0.03 if not big else 0.08, PLAYER_FX_CAP)
+        else:
+            self.shake(0.12 if not big else 0.45, 0.7)
+            if big:
+                self.camera.vibrate(10)
 
     def enemies_on_segment(self, x1, y1, x2, y2, half_w: float) -> list:
         out = []
@@ -595,8 +634,8 @@ class Run:
     # --- cílení ------------------------------------------------------------------------------
     def nearest_enemy(self, x: float, y: float, max_d: float = 600.0, exclude: set | None = None):
         if exclude:
-            return self.grid.nearest(x, y, max_d, lambda o: not o.prop and o.alive and o.id not in exclude)
-        return self.grid.nearest(x, y, max_d, _not_prop)
+            return self.grid.nearest(x, y, max_d, lambda o: _targetable(o) and o.id not in exclude)
+        return self.grid.nearest(x, y, max_d, _targetable)
 
     def targets(self, x: float, y: float, max_d: float, n: int) -> list:
         """n cílů; při menším počtu nepřátel se cíle opakují (vše dopadne i na osamoceného bosse)."""
@@ -610,7 +649,7 @@ class Run:
         md2 = max_d * max_d
         cand = []
         for e in buf:
-            if e.alive and not e.prop:
+            if e.alive and not e.prop and e.alpha >= 128:
                 d2 = (e.x - x) ** 2 + (e.y - y) ** 2
                 if d2 < md2:
                     cand.append((d2, e))
@@ -766,6 +805,7 @@ class Run:
         self.sfx("crow", 1.0)
         if self.final_boss is not None and isinstance(getattr(self.final_boss, "wind", None), float):
             self.final_boss.wind = 0.0
+            self.final_boss.inhale = 0.0
         return True
 
     # =====================================================================================
@@ -822,6 +862,7 @@ class Run:
         self.tick += 1
         self.time += dt
         self.flash_t = max(0.0, self.flash_t - real_dt)
+        self.flash_cd = max(0.0, self.flash_cd - real_dt)
         if crow:
             self.crow()
 
@@ -868,6 +909,8 @@ class Run:
 
         # úklid
         self.enemies = [e for e in self.enemies if e.alive]
+        if self.bosses and any(not c.e.alive for c in self.bosses):
+            self.bosses = [c for c in self.bosses if c.e.alive]
         if self.tick % 30 == 0:
             self.allies = [a for a in self.allies if a.alive]
 
@@ -900,6 +943,16 @@ class Run:
 
     def _open_levelup(self) -> None:
         from .. import progression
+        if not progression.has_choices(self):
+            # build je kompletní – levelup jen vyléčí a hru nepřeruší
+            n = self.pending_levelups
+            self.pending_levelups = 0
+            p = self.player
+            p.heal(p.stats.max_hp * progression.HEAL_FILL * n)
+            self.add_text(p.x, p.y - 46, f"Úr. {self.level}  +zdraví", (120, 255, 140), 2, 1.2)
+            self.particles.stars(p.x, p.y - 20, 6, (120, 255, 140), 90)
+            self.sfx("heal", 0.6)
+            return
         self.state = "levelup"
         self.offer = progression.make_offer(self)
         self.sfx("levelup")
@@ -922,6 +975,12 @@ class Run:
             self._open_chest()
 
     def on_player_death(self) -> None:
+        if self.victory:
+            # smrt ve stejném ticku jako porážka finálního bosse – vítězství má přednost
+            p = self.player
+            p.dead = False
+            p.hp = max(1.0, p.hp)
+            return
         self.state = "dying"
         self.state_t = 1.4
         p = self.player
@@ -1039,7 +1098,7 @@ class Run:
                     if not lst:
                         continue
                     for e in lst:
-                        if not e.alive:
+                        if not e.alive or e.alpha < 128:
                             continue
                         ex = e.x - pr.x
                         ey = e.y - pr.y
@@ -1228,5 +1287,6 @@ class Run:
         return [(w.id, w.level, w.damage_dealt, w.evolved) for w in self.weapons]
 
 
-def _not_prop(o) -> bool:
-    return not o.prop and o.alive
+def _targetable(o) -> bool:
+    """Cíl auto-aimu: živý nepřítel, ne sud, ne neviditelný boss (Pan Liška Špión v mlze)."""
+    return not o.prop and o.alive and o.alpha >= 128

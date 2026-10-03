@@ -18,7 +18,8 @@ LOGO_RECT = pygame.Rect(40, 110, W - 80, 150)
 
 class MenuScene(Scene):
     music = "menu"
-    _login_checked = False
+    suppress_login = False      # testy/nástroje: nezobrazovat denní odměnu
+    _load_error_shown = False
 
     def __init__(self, app) -> None:
         super().__init__(app)
@@ -44,8 +45,9 @@ class MenuScene(Scene):
 
     def enter(self) -> None:
         super().enter()
-        if not MenuScene._login_checked:
-            MenuScene._login_checked = True
+        # denní odměna se kontroluje při každém návratu do menu (relace přes půlnoc dostane i nový den);
+        # daily_login sám hlídá, aby se v jednom dni nevyplatila dvakrát
+        if not MenuScene.suppress_login:
             rw = progression.daily_login(self.save)
             if rw:
                 parts = []
@@ -58,7 +60,8 @@ class MenuScene(Scene):
                 self.modal = Dialog(f"Den {rw['streak']} v řadě!",
                                     "Denní odměna za návštěvu farmy: " + ", ".join(parts) + ". Vrať se zítra pro další!",
                                     [("Díky!", None, "primary")], icon="calendar")
-            elif self.save.load_error:
+            elif self.save.load_error and not MenuScene._load_error_shown:
+                MenuScene._load_error_shown = True
                 self.modal = Dialog("Uložená hra poškozena", "Soubor save.json byl poškozený, začínáš nanovo. "
                                     "Původní soubor jsme zálohovali.", [("OK", None, "primary")])
 
