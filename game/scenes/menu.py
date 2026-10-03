@@ -42,9 +42,10 @@ class MenuScene(Scene):
                 b.badge = "!"
         self.foxes = [[random.uniform(-200, W), random.uniform(470, 540), random.uniform(30, 60)] for _ in range(5)]
         self.season = progression.season_for(None, self.save.settings.get("season", "auto"))
-        self.stars = [(random.randrange(W) // 2 * 2, random.randrange(420) // 2 * 2, random.random()) for _ in range(60)]
-        # světlušky nad trávou a třpytky na logu
-        self.flies = [[random.uniform(0, W), random.uniform(380, 560), random.uniform(0, 6.3), random.uniform(0.6, 1.3)]
+        self.stars = [(random.randrange(W), random.randrange(420), random.random()) for _ in range(60)]
+        # světlušky nad trávou a třpytky na logu (vlastní RNG – globální random stream zůstává jako dřív)
+        vr = self._vrng = random.Random(21)
+        self.flies = [[vr.uniform(0, W), vr.uniform(380, 560), vr.uniform(0, 6.3), vr.uniform(0.6, 1.3)]
                       for _ in range(12)]
         self.fx = ParticleSystem(80)
         self._twinkle = 0.6
@@ -145,9 +146,10 @@ class MenuScene(Scene):
         # občasný třpyt na logu
         self._twinkle -= dt
         if self._twinkle <= 0:
-            self._twinkle = random.uniform(0.5, 1.3)
-            x = random.uniform(120, W - 120)
-            y = random.choice((random.uniform(130, 190), random.uniform(206, 272)))
+            vr = self._vrng
+            self._twinkle = vr.uniform(0.5, 1.3)
+            x = vr.uniform(120, W - 120)
+            y = vr.choice((vr.uniform(130, 190), vr.uniform(206, 272)))
             self.fx.emit(x, y, 0, 0, 0.45, STAR, (255, 250, 220), 3)
         self.fx.update(dt)
 

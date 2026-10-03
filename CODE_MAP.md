@@ -110,3 +110,10 @@ Read-only map written before the polish pass. ~14.4k lines Python, pygame-ce 2.5
 4. Pass C – world: covered by decals/ambient/vignette/glows.
 5. Pass D – `LICENSES.md`, store assets script `tools/make_store_assets.py` → `store/`.
 6. Verify: smoke tests, profile, screenshots `polish/after/`.
+
+## Status after the polish pass (2026-10-03)
+- [x] Event-site table: every row has feedback. The boss-attack sites in `bosses.py`/`mapgen.py`/`allies.py` were not edited; they get the new look through the shared puff/spark/blob sprites.
+- [x] Screen table: menu, all sub-screens (shared background), HUD, level-up, chest, pause, dialog, results and settings use the new widgets. Error screen deliberately left plain.
+- [x] Gameplay unchanged: 6 seeded bot runs (3 biomes × headless/rendered) produce identical state, kills, HP, position and coins before vs after (`bd206ca` vs HEAD).
+- Known gaps: telegraph visuals (circle/line/band) unchanged; joystick, toasts and line/band telegraphs still allocate small Surfaces per frame (pre-existing); no new audio; menu sub-screens have no idle motion besides the drifting background.
+- Discovered hazard: the `full_game_flow_through_scenes` smoke test depends on run timing. Consuming extra global `random` values in the menu shifted run seeds and made it fail ("chybí dialog oživení"). Visual code must use private RNGs (now done everywhere).

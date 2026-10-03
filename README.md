@@ -141,6 +141,7 @@ python tools/profile_run.py [--cprofile] [--kills] [--biome=forest]   # zátěž
 python tools/dps_bench.py             # DPS všech zbraní (single target / AoE) pro balanc
 python tools/screenshots.py out_dir   # screenshoty všech scén
 python tools/preview_sprites.py sheet.png             # contact sheet všech spritů
+python tools/make_store_assets.py   # grafika pro Google Play do store/ (ikona, feature graphic, screenshoty)
 ```
 
 ## Výkon (ověřeno profilingem)

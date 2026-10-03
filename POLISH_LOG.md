@@ -37,3 +37,7 @@
 - Settings: added an "O hře" (About) dialog with version, credits, privacy statement (no data collected) and a licence pointer. It shares a row with "Smazat postup", so the layout did not grow.
 - Crow button: a warm additive glow behind it when ready.
 - Fireflies were first drawn as large haloes that read as grey blobs on the purple sky. Changed to a small glow + 3 px bright core.
+- Snow on the Mountains was invisible (white on white, then tinted by the night lighting). Flakes now have a blue-grey shadow pixel, near flakes are 6 px, and they are drawn after the night lighting.
+- Speech bubbles use the same notched pixel frame as panels.
+- Menu fireflies and twinkles use a private `random.Random(21)` so the global random stream (which seeds runs) matches the original exactly.
+- Store: `tools/make_store_assets.py` → `store/` (icon 512, feature graphic 1024×500 drawn at 512×250 and scaled 2× nearest, 5 captioned screenshots 1080×1920 with the game at 1.6×). Scripted kills there hide damage numbers so no "1000000000" appears.

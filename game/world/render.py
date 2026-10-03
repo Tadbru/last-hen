@@ -13,6 +13,7 @@ from ..gfx import pixelart as pa
 from ..gfx.particles import blit_add, glow_sprite
 from ..gfx.sprites import angle_index
 from ..gfx.tiles import TILE
+from ..ui.widgets import notched_rect
 from ..util import clamp, lerp_color, mul_color
 from .entities import M_BOOMERANG, M_LOB, M_SPIRAL, M_WAVE, P_CHEST, P_COIN, P_GOLDEGG, P_MAGNET, P_WORM, P_XP
 
@@ -742,8 +743,9 @@ class RunRenderer:
             y = clamp(y, th + 60, H - 40)
             rect = pygame.Rect(0, 0, tw, th)
             rect.midbottom = (x, y)
-            pygame.draw.rect(surf, (20, 12, 24), rect.inflate(4, 4))
-            pygame.draw.rect(surf, (255, 250, 235), rect)
+            notched_rect(surf, (20, 12, 24), rect.inflate(6, 6))
+            notched_rect(surf, (255, 250, 235), rect)
+            pygame.draw.rect(surf, (226, 214, 196), (rect.x + 3, rect.bottom - 3, rect.w - 6, 3))
             pygame.draw.polygon(surf, (255, 250, 235), [(x - 6, rect.bottom), (x + 6, rect.bottom), (x, rect.bottom + 8)])
             yy = rect.y + 5
             for ln in lines:
@@ -802,15 +804,17 @@ class _Ambient:
         night = 0.15 if run.victory else 1.0 - clamp(run.time / ft, 0, 1) * 0.85
         adds = []
         for x, y, ph, kind, sp in self.items:
-            glowy = kind in ("fly", "ember")
+            glowy = kind in ("fly", "ember", "snow")     # sníh až po nočním přítmí – jinak splyne se zemí
             if glowy != lit:
                 continue
             par = 1.0 + (sp - 1.0) * 0.4
             px = int((x - ox * par) % sx_span) - 30
             py = int((y - oy * par) % sy_span) - 30
             if kind == "snow":
-                s = 3 if sp > 0.95 else 2
-                surf.fill((246, 250, 255), (px // 3 * 3, py // 3 * 3, s, s))
+                s = 6 if sp > 1.1 else 3
+                gx, gy = px // 3 * 3, py // 3 * 3
+                surf.fill((140, 160, 200), (gx + 3, gy + 3, s, s))     # stín – vločka čitelná i na sněhu
+                surf.fill((250, 252, 255), (gx, gy, s, s))
             elif kind == "leaf":
                 c = self.leaf_cols[int(ph * 3) % 3]
                 flip = int(self.t * 3 + ph * 5) & 1
