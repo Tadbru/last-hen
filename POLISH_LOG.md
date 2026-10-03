@@ -59,3 +59,11 @@
 - Page dots: pixel-art balls from the same generator as the sprites (`pa.build`: outline + light from the top) on the 2 px font grid. Selected 5×5, others 4×4, instead of `pygame.draw.circle`.
 - Ground tiles: spots no longer wrap around the tile edge (they were cut off at seams with a different variant). The farm "road" strip and the factory hazard stripe ended abruptly at tile edges → replaced by contained motifs (irregular trodden dirt, a hazard plate inside one panel).
 - Stink: the cloud was 7 lobes with dark rims = "circles on top of each other" → now billowing smoke like the explosions: many smaller puffs (shaded discs without a rim) that are born, swell, rise and fade, deterministic from time. The aura is the same puffs in a ring band.
+
+## Round 4 (user feedback)
+- Menu stars no longer switch off and on: they always shine, and about a quarter of them slowly change brightness between two tones.
+- Player "squashes" when changing direction: on every turn the speed briefly drops below the walk threshold → the movement-start stretch fires again → the spring wobbled the sprite on frequent zig-zags. Visual-only fix in the renderer: deformation reduced to 35 %, capped at ±8 %, ignored below 3 %. `player.py` unchanged.
+- Pause: dim 225 (almost black) → 120. The paused game stays visible behind the panel.
+- Chest: rays in two layers rotating against each other (wide slow ones at the back, narrow fast ones in front), drawn at art resolution and scaled ×3 (pixel edges). Plus a pulsing glow behind the chest, a star burst on opening, rising sparkles and a gentle bob of the chest. The rays surface is reused (no per-frame allocation, unlike before).
+- Results background: two stripe layers at different speeds (parallax) in pixel resolution, slow sun rays from the top on victory, and the same vignette as the other screens.
+- The dark grass "spikes" at the bottom of the menu were removed; only the gradient remains.

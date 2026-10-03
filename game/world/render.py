@@ -605,9 +605,10 @@ class RunRenderer:
             # průhlednost až na hotový (případně otočený) snímek – nikdy ne do cache
             img = img.copy()
             img.set_alpha(120)
-        sq = clamp(p.sq, 0.75, 1.25)
+        # squash & stretch jen naznačený: při častém kličkování dřív slepici neustále „rozplácával“
+        sq = clamp(1.0 + (p.sq - 1.0) * 0.35, 0.92, 1.08)
         w0, h0 = img.get_size()
-        if abs(sq - 1) > 0.02:
+        if abs(sq - 1) > 0.03:
             img = pygame.transform.scale(img, (int(w0 * (2 - sq)), int(h0 * sq)))
         w, h = img.get_size()
         bob = -abs(math.sin(p.anim * 0.5 * math.pi)) * 3 if p.moving else 0

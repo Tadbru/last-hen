@@ -165,7 +165,7 @@ class ResultsScene(Scene):
         font = assets.font
         run = self.run
         draw_bg(surf, self.t, (50, 34, 40) if not self.victory else (60, 46, 30),
-                (60, 40, 48) if not self.victory else (74, 58, 36))
+                (60, 40, 48) if not self.victory else (74, 58, 36), rays=self.victory)
         k = ease_out_back(min(1.0, self.t * 2.5))
         if self.victory:
             title, col = "VÍTĚZSTVÍ!", (255, 220, 90)

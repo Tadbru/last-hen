@@ -152,9 +152,9 @@ class MenuScene(Scene):
         font = assets.font
         surf.blit(_menu_backdrop(), (0, 0))
         for x, y, ph in self.stars:
-            tw = math.sin(self.t * 2 + ph * 10)
-            if tw > -0.3:
-                surf.fill((255, 250, 220) if tw > 0.6 else (190, 180, 200), (x, y, 2, 2))
+            # hvězdy svítí stále; jen asi čtvrtina pomalu mírně mění jas (dřív blikaly zhasnuto/rozsvíceno)
+            bright = ph < 0.25 and math.sin(self.t * 0.8 + ph * 40) > 0.3
+            surf.fill((255, 250, 220) if bright or ph > 0.6 else (200, 192, 214), (x, y, 2, 2))
         # měsíc se září
         blit_add(surf, [(glow_sprite(16, (90, 84, 60), 0.9 + 0.1 * math.sin(self.t * 1.5)), (430 - 49, 80 - 49))])
         surf.blit(_moon(), (430 - 36, 80 - 36))
@@ -282,11 +282,6 @@ def _menu_backdrop() -> pygame.Surface:
         y = meadow[x] + rng.randrange(5, 40)
         low.set_at((x, y), rng.choice(((214, 214, 240), (240, 220, 140), (190, 170, 230))))
         low.set_at((x, y + 1), (30, 56, 40))
-    # rám: tmavá vysoká tráva u spodního okraje
-    for x in range(aw):
-        hgt = int(5 + 4 * math.sin(x * 0.31) + 3 * math.sin(x * 0.83 + 1) + rng.randint(0, 3))
-        for y in range(ah - hgt, ah):
-            low.set_at((x, y), (14, 24, 24) if (y - (ah - hgt)) > 0 or x & 1 else (18, 30, 28))
     s = pygame.transform.scale(low, (W, H))
 
     sb = assets.sprites
