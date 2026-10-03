@@ -50,6 +50,11 @@ Screenshoty: před `polish/before/`, po `polish/after/` (stejná sada a stejný 
 - Pauza: místo téměř černé je za panelem lehce ztmavená hra.
 - Bedna: dvouvrstvé paprsky proti sobě, záře, třpytky a pohupování. Pozadí výsledků: parallax pruhy a při výhře sluneční paprsky.
 
+### Kolo 5 (podle zpětné vazby)
+- Kurník nemá rampu ani ve hře.
+- Bedna: paprsky jako v původní verzi, ale jen jednou vystřelí a vyblednou (žádné trvalé efekty).
+- Pozadí výsledků: klidná pixelová scéna. Výhra = svítání se sluncem za kopcem a plujícími mráčky, prohra = noc s hvězdami a měsícem.
+
 ## Zjištění z kódu, která stojí za pozornost
 - **Hra už byla vizuálně soudržná.** Pixel art, vlastní bitmapový font s diakritikou, stíny, y-sorting, omezený třes (trauma model), omezovač záblesků a nastavení přístupnosti tu byly. Rozšiřoval jsem existující systémy, nic paralelního nevzniklo.
 - **`Run.rng` je herní RNG** (deterministické denní výzvy). Všechen nový vizuální kód používá vlastní RNG částic, ambientu nebo menu. Pozor ale na **existující únik**: `damage_enemy` bere `run.rng` na posun čísla poškození jen když hra není headless. Headless simulace a skutečná hra se stejným seedem se proto rozejdou. Nebyl to úkol této práce, nechal jsem to být.

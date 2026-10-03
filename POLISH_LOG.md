@@ -67,3 +67,8 @@
 - Chest: rays in two layers rotating against each other (wide slow ones at the back, narrow fast ones in front), drawn at art resolution and scaled ×3 (pixel edges). Plus a pulsing glow behind the chest, a star burst on opening, rising sparkles and a gentle bob of the chest. The rays surface is reused (no per-frame allocation, unlike before).
 - Results background: two stripe layers at different speeds (parallax) in pixel resolution, slow sun rays from the top on victory, and the same vignette as the other screens.
 - The dark grass "spikes" at the bottom of the menu were removed; only the gradient remains.
+
+## Round 5 (user feedback)
+- Coop: the ramp is removed from the sprite entirely, so it is gone in the game as well. Collision uses constants (`mapgen.py`), not the sprite, so this is visual only.
+- Chest: the persistent two-layer rays, pulsing glow, rising sparkles and bob were too much → back to the original single-layer rays, which now **shoot out once** on opening (reach grows in 0.3 s), shine briefly and fade by 1.4 s. The star burst on opening stays.
+- Results background: the parallax stripes and rays were not liked → replaced by a calm static pixel scene. Victory = dawn (dithered sky gradient into orange, half-risen sun behind a dark hill, slowly drifting pink pixel clouds). Defeat = night (steady stars, moon, dark clouds). The buttons sit on the dark hill (contrast), and the messages have a light translucent band so they stay readable over the sun. The unused `draw_bg` was removed.

@@ -1,7 +1,9 @@
 """Výsledky runu – statistiky, build, vejce, odemčení, rychlý restart, sdílení, mock reklama."""
 from __future__ import annotations
 
+import math
 import os
+import random
 
 import pygame
 
@@ -10,7 +12,7 @@ from ..config import C_GOLD, C_OUTLINE, C_TEXT, H, W
 from ..ui.widgets import Button, draw_icon_frame, draw_panel
 from ..gfx.particles import FEATHER, ParticleSystem
 from ..util import ease_out_back, ease_out_cubic, fmt_num, fmt_time
-from .base import Dialog, Scene, draw_bg
+from .base import Dialog, Scene
 
 
 # Podtitul výhry podle mapy (B-64)
@@ -164,8 +166,7 @@ class ResultsScene(Scene):
     def draw(self, surf) -> None:
         font = assets.font
         run = self.run
-        draw_bg(surf, self.t, (50, 34, 40) if not self.victory else (60, 46, 30),
-                (60, 40, 48) if not self.victory else (74, 58, 36), rays=self.victory)
+        _draw_backdrop(surf, self.t, self.victory)
         k = ease_out_back(min(1.0, self.t * 2.5))
         if self.victory:
             title, col = "VÍTĚZSTVÍ!", (255, 220, 90)
@@ -228,6 +229,9 @@ class ResultsScene(Scene):
         if pages:
             page = pages[self._page % len(pages)]
             y = self._msg_area.y
+            # jemný tmavý podklad – zprávy čitelné i přes vycházející slunce
+            bh = len(page) * font.line_h(2) + 10
+            surf.blit(_msg_band(self._msg_area.w, bh), (self._msg_area.x, y - 5))
             for ln in page:
                 font.draw(surf, ln, (W // 2, y), (140, 255, 160), 2, "midtop", outline=C_OUTLINE)
                 y += font.line_h(2)
@@ -236,3 +240,126 @@ class ResultsScene(Scene):
                           (W // 2, self._msg_area.bottom + 4), (200, 190, 210), 2, "midbottom")
         self.draw_buttons(surf)
         self.draw_overlays(surf)
+
+
+# --- pozadí: klidná pixelová scéna (výhra = svítání, prohra = noc) -------------------------------------
+_BD: dict = {}
+
+
+def _mix(a, b, t: float):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def _backdrop(victory: bool) -> pygame.Surface:
+    """Statická scéna v art pixelech (180×320, zvětšeno ×3): obloha s ditherovaným přechodem, slunce/měsíc,
+    hvězdy a tmavý kopec, na kterém leží tlačítka (kontrast)."""
+    key = "v" if victory else "d"
+    s = _BD.get(key)
+    if s is not None:
+        return s
+    aw, ah = W // 3, H // 3
+    low = pygame.Surface((aw, ah))
+    horizon = 214
+    if victory:
+        stops = [(0, (34, 30, 74)), (90, (86, 56, 108)), (160, (190, 98, 102)), (horizon, (248, 166, 96))]
+    else:
+        stops = [(0, (12, 9, 26)), (120, (30, 20, 50)), (horizon, (62, 34, 62))]
+    for y in range(ah):
+        for (y0, c0), (y1, c1) in zip(stops, stops[1:]):
+            if y0 <= y < y1 or (y >= y1 and (y1, c1) == stops[-1]):
+                k = min(1.0, (y - y0) / max(1, y1 - y0))
+                break
+        steps = 6
+        f = k * steps
+        i = int(f)
+        for x in range(aw):
+            kk = (i + (1 if f - i > 0.5 and (x + y) & 1 else 0)) / steps
+            low.set_at((x, y), _mix(c0, c1, min(1.0, kk)))
+    rng = random.Random(7 if victory else 8)
+    if victory:
+        # napůl vyšlé slunce za kopcem
+        cx, cy, r = aw // 2, horizon + 6, 26
+        for yy in range(cy - r - 6, cy + 1):
+            for xx in range(cx - r - 6, cx + r + 7):
+                d = math.hypot(xx - cx, yy - cy)
+                if 0 <= xx < aw and 0 <= yy < ah:
+                    if d <= r:
+                        low.set_at((xx, yy), (255, 236, 160) if d < r - 2 else (255, 214, 120))
+                    elif d <= r + 5 and (xx + yy) & 1:
+                        low.set_at((xx, yy), _mix(low.get_at((xx, yy))[:3], (255, 214, 140), 0.45))
+    else:
+        for _ in range(70):
+            x, y = rng.randrange(aw), rng.randrange(150)
+            low.set_at((x, y), (230, 224, 240) if rng.random() < 0.4 else (150, 140, 180))
+    # tmavý kopec s nasvícenou hranou
+    rim = (120, 70, 80) if victory else (70, 52, 84)
+    body = [(52, 30, 50), (40, 24, 42), (30, 18, 34)] if victory else [(30, 22, 44), (24, 18, 36), (18, 13, 28)]
+    for x in range(aw):
+        top = int(horizon + 4 + 4 * math.sin(x * 0.045 + 0.6) + 2 * math.sin(x * 0.13))
+        for y in range(top, ah):
+            band = min(2, (y - top) // 30)
+            c = body[band]
+            if (y - top) % 30 > 27 and band < 2 and (x + y) & 1:
+                c = body[band + 1]
+            low.set_at((x, y), c)
+        low.set_at((x, top), rim)
+    s = pygame.transform.scale(low, (W, H))
+    if not victory:
+        from .menu import _moon
+        s.blit(_moon(), (430, 40))
+    _BD[key] = s
+    return s
+
+
+def _cloud(seed: int, victory: bool) -> pygame.Surface:
+    key = ("c", seed, victory)
+    s = _BD.get(key)
+    if s is not None:
+        return s
+    rng = random.Random(seed)
+    w, h = rng.randint(24, 38), rng.randint(7, 10)
+    grid = [[False] * w for _ in range(h)]
+    for _ in range(5):
+        bx, by = rng.uniform(w * 0.2, w * 0.8), rng.uniform(h * 0.45, h * 0.7)
+        rx, ry = rng.uniform(w * 0.18, w * 0.32), rng.uniform(h * 0.3, h * 0.5)
+        for y in range(h):
+            for x in range(w):
+                if ((x + 0.5 - bx) / rx) ** 2 + ((y + 0.5 - by) / ry) ** 2 <= 1:
+                    grid[y][x] = True
+    for x in range(w):
+        grid[h - 1][x] = grid[h - 2][x]        # plochý spodek mraku
+    hi, mid, lo = ((255, 214, 196), (236, 160, 162), (176, 104, 124)) if victory else         ((84, 70, 112), (60, 48, 86), (42, 32, 64))
+    low = pygame.Surface((w, h), pygame.SRCALPHA)
+    for y in range(h):
+        for x in range(w):
+            if grid[y][x]:
+                above = y == 0 or not grid[y - 1][x]
+                below = y == h - 1 or not grid[y + 1][x]
+                low.set_at((x, y), (*(hi if above else lo if below else mid), 255))
+    s = _BD[key] = pygame.transform.scale(low, (w * 3, h * 3))
+    return s
+
+
+# (seed, y, rychlost px/s, počáteční x)
+_CLOUDS = [(11, 96, 6.0, 40), (23, 210, 4.0, 300), (37, 470, 7.5, 120), (41, 610, 5.0, 420)]
+
+
+def _draw_backdrop(surf, t: float, victory: bool) -> None:
+    surf.blit(_backdrop(victory), (0, 0))
+    for seed, y, sp, x0 in _CLOUDS:
+        c = _cloud(seed, victory)
+        span = W + c.get_width()
+        x = int((x0 + t * sp) % span) - c.get_width()
+        surf.blit(c, (x // 3 * 3, y))
+
+
+def _msg_band(w: int, h: int) -> pygame.Surface:
+    key = ("band", w, h)
+    s = _BD.get(key)
+    if s is None:
+        s = pygame.Surface((w, h), pygame.SRCALPHA)
+        s.fill((16, 10, 26, 140), (3, 0, w - 6, h))
+        s.fill((16, 10, 26, 140), (0, 3, 3, h - 6))
+        s.fill((16, 10, 26, 140), (w - 3, 3, 3, h - 6))
+        _BD[key] = s
+    return s

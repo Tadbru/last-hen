@@ -258,39 +258,6 @@ class Scene:
             self.modal.draw(surf)
 
 
-def draw_bg(surf, t: float, color=(40, 28, 48), stripes=(48, 34, 58), rays: bool = False) -> None:
-    """Animované pozadí (výsledky) s hloubkou: dvě vrstvy pruhů v různé rychlosti (parallax), při výhře
-    pomalé sluneční paprsky shora, vinětace. Kreslí se v art pixelech (1/3) a zvětšuje ×3."""
-    from ..util import lerp_color
-    aw, ah = W // 3, H // 3
-    low = _BG_CACHE.get("low")
-    if low is None:
-        low = _BG_CACHE["low"] = pygame.Surface((aw, ah))
-    low.fill(color)
-    far = lerp_color(color, stripes, 0.5)
-    off = (t * 2.5) % 48
-    for i in range(-2, ah // 48 + 4):
-        y = i * 48 + off
-        pygame.draw.polygon(low, far, [(0, y), (aw, y - 40), (aw, y - 16), (0, y + 24)])
-    if rays:
-        cx, cy = aw // 2, 10
-        ray = lerp_color(color, (255, 226, 140), 0.2)
-        for i in range(10):
-            a = t * 0.12 + i * math.tau / 10
-            pygame.draw.polygon(low, ray, [(cx, cy), (cx + math.cos(a) * 400, cy + math.sin(a) * 400),
-                                           (cx + math.cos(a + 0.2) * 400, cy + math.sin(a + 0.2) * 400)])
-    off = (t * 7) % 22
-    for i in range(-2, ah // 22 + 4):
-        y = i * 22 + off
-        pygame.draw.polygon(low, stripes, [(0, y), (aw, y - 40), (aw, y - 30), (0, y + 10)])
-    pygame.transform.scale(low, (W, H), surf)
-    vig = _BG_CACHE.get("vig")
-    if vig is None:
-        vig = _BG_CACHE["vig"] = _bg_vignette()
-    for img, pos in vig:
-        surf.blit(img, pos)
-
-
 # --- sdílené pozadí obrazovek menu ------------------------------------------------------------
 _BG_CACHE: dict = {}
 _DIM_CACHE: dict = {}

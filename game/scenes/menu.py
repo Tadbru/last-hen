@@ -309,7 +309,7 @@ def _menu_backdrop() -> pygame.Surface:
 
     hill = ((30, 50, 54), (50, 80, 68))
     # na prostředním kopci: kurník (bez rampy), strašák, stodola – zapuštěné do svahu, s oparem
-    put(sb._coop(ramp=False), 70, mid[70 // 3] * 3 + 12, (100, 104, 150), k=0.3, base=hill)
+    put(sb.misc["coop"], 70, mid[70 // 3] * 3 + 12, (100, 104, 150), k=0.3, base=hill)
     put(sb.decor["scarecrow"], 160, mid[160 // 3] * 3 + 6, (100, 104, 150), k=0.3, base=hill)
     put(sb.misc["barn"], 412, mid[412 // 3] * 3 + 18, (100, 104, 150), k=0.28, base=hill)
     # plot na hraně louky (mezera za slepicí) a balíky sena

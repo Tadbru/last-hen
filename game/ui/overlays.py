@@ -10,7 +10,7 @@ from ..config import C_GOLD, C_OUTLINE, C_TEXT, H, RARITY_COLORS, RARITY_NAMES, 
 from ..data.passives import PASSIVES
 from ..data.weapons import WEAPONS
 from ..util import ease_out_back, ease_out_cubic, fmt_num
-from ..gfx.particles import STAR, ParticleSystem, blit_add, glow_sprite
+from ..gfx.particles import ParticleSystem
 from .widgets import Button, draw_frame, draw_icon_frame, draw_panel
 
 
@@ -293,8 +293,8 @@ class ChestOverlay(Overlay):
                            key=pygame.K_RETURN)
         self.b_ok.visible = False
         self.buttons = [self.b_ok]
-        self.fx = ParticleSystem(140)
-        self._spark_t = 0.0
+        self.fx = ParticleSystem(60)
+        self.open_t = 0.0
         assets.audio.play("chest")
 
     def _close(self) -> None:
@@ -315,17 +315,9 @@ class ChestOverlay(Overlay):
     def update(self, dt: float) -> None:
         super().update(dt)
         self.fx.update(dt)
-        if self.opened:
-            # třpytky stoupající kolem truhly
-            self._spark_t -= dt
-            if self._spark_t <= 0:
-                self._spark_t = 0.07
-                r = self.fx.rng
-                col = (255, 140, 255) if self.reward and self.reward.get("evolution") else (255, 226, 120)
-                self.fx.emit(W // 2 + r.uniform(-90, 90), 168 + r.uniform(-20, 40), r.uniform(-10, 10),
-                             r.uniform(-70, -30), r.uniform(0.6, 1.1), STAR, col, 3)
         if not self.opened and self.t >= 1.0:
             self.opened = True
+            self.open_t = self.t
             self.fx.burst_ring(W // 2, 168, 16, (255, 236, 150), 260)
             assets.audio.play("gold")
             if self.reward and self.reward.get("evolution"):
@@ -347,16 +339,13 @@ class ChestOverlay(Overlay):
             font.draw(surf, "BEDNA!", (cx, cy - 130), C_GOLD, 5, "midtop", outline=C_OUTLINE)
             font.draw(surf, "klepni pro otevření", (cx, cy + 90), C_TEXT, 2, "midtop", outline=C_OUTLINE)
             return
-        # paprsky přes celou obrazovku ve dvou vrstvách (pomalé široké vzadu, rychlejší úzké vpředu = hloubka),
-        # kreslené v art pixelech (1/3) a zvětšené – hrany sedí k pixel artu
-        surf.blit(_chest_rays(self.t, evo), (0, 0))
-        k = 0.5 + 0.5 * math.sin(self.t * 3)
-        g = glow_sprite(30, (150, 70, 150) if evo else (150, 110, 40), 0.7 + 0.3 * k)
-        blit_add(surf, [(g, g.get_rect(center=(cx, 168)))])
+        # paprsky jednou „vystřelí“ z truhly a vyblednou (kreslené v art pixelech, zvětšené ×3)
+        rays = _chest_rays(self.t - self.open_t, self.t, evo)
+        if rays is not None:
+            surf.blit(rays, (0, 0))
         self.fx.draw(surf, 0, 0)
         img = assets.icons.get("chest", 6)
-        bob = int(math.sin(self.t * 2.4) * 4) // 2 * 2
-        surf.blit(img, img.get_rect(center=(cx, 168 + bob)))
+        surf.blit(img, img.get_rect(center=(cx, 168)))
         font.draw(surf, "EVOLUCE!" if evo else "Poklad!", (cx, 56), (255, 140, 255) if evo else C_GOLD, 5, "midtop",
                   outline=C_OUTLINE)
         if self.reward:
@@ -500,21 +489,24 @@ class PauseOverlay(Overlay):
 _RAYS: dict = {}
 
 
-def _chest_rays(t: float, evo: bool) -> pygame.Surface:
-    """Paprsky z truhly: dvě vrstvy otáčející se proti sobě, v rozlišení art pixelů, zvětšené ×3."""
+def _chest_rays(age: float, t: float, evo: bool):
+    """Paprsky z truhly: při otevření vystřelí (rychle se prodlouží), chvíli svítí a vyblednou. None = už nejsou."""
+    fade = 1.0 - max(0.0, (age - 0.5) / 0.9)
+    if fade <= 0:
+        return None
     low = _RAYS.get("low")
     if low is None:
         low = _RAYS["low"] = pygame.Surface((W // 3, H // 3), pygame.SRCALPHA)
         _RAYS["big"] = pygame.Surface((W, H), pygame.SRCALPHA)
     low.fill((0, 0, 0, 0))
     cx, cy = W // 6, 56
-    back = (255, 160, 255, 34) if evo else (255, 200, 90, 34)
-    front = (255, 190, 255, 62) if evo else (255, 236, 140, 62)
-    for col, n, width, speed in ((back, 8, 0.32, -0.25), (front, 14, 0.11, 0.6)):
-        for i in range(n):
-            a = t * speed + i * math.tau / n
-            pygame.draw.polygon(low, col, [(cx, cy), (cx + math.cos(a) * 400, cy + math.sin(a) * 400),
-                                           (cx + math.cos(a + width) * 400, cy + math.sin(a + width) * 400)])
+    reach = 400 * ease_out_cubic(min(1.0, age / 0.3))
+    a0 = 70 if evo else 60
+    col = (255, 120, 255, int(a0 * fade)) if evo else (255, 220, 90, int(a0 * fade))
+    for i in range(12):
+        a = t * 0.8 + i * math.tau / 12
+        pygame.draw.polygon(low, col, [(cx, cy), (cx + math.cos(a) * reach, cy + math.sin(a) * reach),
+                                       (cx + math.cos(a + 0.15) * reach, cy + math.sin(a + 0.15) * reach)])
     big = _RAYS["big"]
     pygame.transform.scale(low, (W, H), big)
     return big

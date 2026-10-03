@@ -1000,7 +1000,7 @@ class SpriteBank:
         pygame.draw.lines(s, pa.OUTLINE, True, m.outline(), 1)
         return pa.scale(s, PX)
 
-    def _coop(self, ramp: bool = True) -> pygame.Surface:
+    def _coop(self) -> pygame.Surface:
         s = pygame.Surface((26, 22), pygame.SRCALPHA)
         wood, dwood, roof = (190, 140, 80), (140, 96, 56), (160, 60, 50)
         pygame.draw.rect(s, wood, (2, 8, 22, 12))
@@ -1008,8 +1008,6 @@ class SpriteBank:
             pygame.draw.line(s, dwood, (2, y), (23, y))
         pygame.draw.polygon(s, roof, [(0, 9), (13, 1), (25, 9)])
         pygame.draw.rect(s, (40, 26, 20), (10, 12, 6, 8))
-        if ramp:
-            pygame.draw.line(s, dwood, (7, 21), (12, 16))
         m = pygame.mask.from_surface(s)
         pygame.draw.lines(s, pa.OUTLINE, True, m.outline(), 1)
         return pa.scale(s, PX)
