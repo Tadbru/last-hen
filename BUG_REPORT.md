@@ -1,224 +1,135 @@
-# Bug report: LAST CHICKEN (4. kolo)
-Datum: 3. 10. 2026 · verze 1.0.6 (commit 8b40820, po opravách B-01 až B-48)
-Číslování navazuje na předchozí reporty (B-49 a dál), aby se nepletlo s už opravenými B-01 až B-48.
+# Bug report: LAST CHICKEN (5. kolo, po polish pass)
+Datum: 3. 10. 2026 · verze 1.0.6 (commit 43f46ab) · číslování navazuje na B-49 až B-66 (předchozí report je v gitu, commit bd206ca).
 
-**Jak jsem testoval**
-- Statická analýza: heuristický scanner (26 tipů, většinou šum) + ruční čtení `run.py`, `player.py`, `bosses.py`, `enemies.py`, `director.py`, `progression.py`, `weapons/*`, `allies.py`, `mapgen.py`, `camera.py`, `sound.py`, `app.py`, `input.py`, `hud.py`, `overlays.py`, `game.py`, `results.py`, `daily.py`, `save.py` a dat v `game/data/`.
-- Dynamické sondy (headless, pygame-ce 2.5.8, skripty mimo projekt): přes 170 botích runů. Rychlý mód: 7 zvířat × 5 map, 8 seedů × 4 zvířata, Hard/Nightmare. Plný mód: 4 zvířata + další seedy. Boss rush: 7 zvířat. Denní výzva s modifikátorem Ohňostroj. Měřil jsem třes kamery, záblesky, pauzy na level-up, rychlost odhozu nepřátel, obsazení zvukových kanálů, strop pickupů, stav arény při příletu bosse, dokončení buildu a dosažitelnost evolucí. Headless snímky obrazovky: Farma, Hory, Továrna.
-- **Neověřeno:** skutečné hraní člověkem, Android (klasický pygame 2.1, výkon, haptika), poslech zvuku, plný mód na Hard/Nightmare.
-- Za zmínku stojí: opravy B-01/B-02 drží. Snímky s posunem kamery nad 6 px tvoří 0,24–1,15 %, záblesky jsou ~5 za minutu, odhoz nepřátel má max. ~850 px/s, zvukové kanály se nevyčerpají a žádný run nespadl.
+**Jak jsem testoval:** statická analýza (scanner + ruční čtení run/render/particles/bosses/overlays/hud/scén), smoke testy (16/16 OK), headless sondy mimo projekt: přes 150 botích runů (všech 7 zvířat × rychlý/plný/boss rush, Hard/Nightmare), 2 dlouhé běhy s renderem (21 min hry), snímky obrazovky přes skutečnou GameScene. **Neověřeno:** Android, hraní člověkem, poslech zvuku.
 
 ## Souhrn
-18 nálezů: 0 kritických, 2 vysoké, 5 středních, 11 drobných.
-Hra je stabilní a „juice“ systémy jsou po minulých opravách v pořádku. Zbývající problémy jsou hlavně systémové. Zrní a bedny se v delším runu ztrácejí: strop pickupů, plot arény a vítězná animace. Balanc postav a módů je nevyrovnaný: placená a odemykací zvířata jsou slabší než startovní slepice, rychlý mód je přerušovaný a jeho finální boss je moc krátký. Drobnosti se týkají modifikátorů, jejichž popis neodpovídá kódu, a textů napsaných natvrdo pro slepici a farmu.
+14 nálezů: 0 kritických, 3 vysoké, 5 středních, 6 drobných.
+Hra je stabilní (žádný pád, výkon 1,2 ms render / 0,55 ms logika medián). Největší problém přinesl polish pass: pool částic tiše „vytéká“ a po ~1:45 hry zmizí všechny efekty. Další témata: stavy, kdy hra stojí (záblesk zamrzne), boss trvale bílý od zásahů, a HUD, který zakrývá vstup a hlášky bossů.
 
 ## Nálezy
 
-### [B-49] Po zaplnění stropu pickupů padá XP z poloviny zabití do vzdáleného zrní mimo obrazovku
+### [B-67] Po ~1:45 hry zmizí všechny částice (pool vyteče)
 - Závažnost: vysoká
-- Kategorie: logika / game feel
-- Kde: `game/world/run.py:716` `drop_xp`, strop `MAX_PICKUPS = 380` v `config.py`
-- Co se děje: od určité chvíle lišky po smrti často nic neupustí. Jejich XP se tiše připíše k náhodnému zrnu kdekoli na mapě, většinou daleko za okrajem obrazovky.
-- Jak se to projeví / kdy: plný mód zhruba od 5. minuty (strop byl dosažen ve 4:58), v rychlém módu ke konci (300–389 pickupů ve 2:30). Staré zrní nikdy nezmizí, takže strop se dřív nebo později zaplní.
-- Důkaz: hen/full/seed 3, 0–10 min: 6 346 dropů, z toho 3 074 sloučeno, z nich **2 589 do zrna dál než 600 px od hráče**. To je 44 % veškeré XP z celého runu.
+- Kategorie: game feel/efekty
+- Kde: `game/gfx/particles.py` `ParticleSystem.update` (větev `elif k == GLOW or k == POP: continue`)
+- Co se děje: exploze, smrt lišek, peří, jiskry, kouř, prach pod nohama, hvězdičky level-upu – od určité chvíle se nevykreslí nic.
+- Jak se to projeví / kdy: každý run, po zhruba 700 emisích GLOW/POP (záře + kroužek při každém zabití). Rychlý mód ~1:15–1:45, na telefonu (strop 450) dřív.
+- Důkaz: GLOW/POP se po 1. update vyřadí z `alive`, ale nevrátí do `free`. Izolovaný test: 2 emise → po update alive 0, free 8 z 10 (2 sloty ztraceny). Run (hen, quick): t=60 s leaked 330, t=105 s leaked 700/700, od té doby 23 235 emisí zahozeno. Dlouhý běh: `part=0` od 3. minuty do 21. minuty. Srovnání stejného seedu v t=125 s: 0 vs. 69 živých částic.
   ```python
-  if len(self.pickups) >= MAX_PICKUPS:
-      for _ in range(4):
-          pk = self.pickups[self.rng.randrange(len(self.pickups))]
-          if pk.kind == P_XP: pk.value += value; return
+  elif k == GLOW or k == POP:
+      continue          # slot se nevrátí do self.free a částice zmizí po 1 snímku
   ```
 - Jistota: ověřeno během běhu
-- Proč to vadí: zabití přestane dávat viditelnou odměnu, hráč přichází o XP a mimo obrazovku vznikají obří zrna, ke kterým se nikdy nevrátí.
-- Směr opravy: slučovat do nejbližšího zrna u místa zabití, případně nechat vzdálené staré zrní mizet nebo ho „nasát“ do jednoho velkého.
+- Proč to vadí: celý polish efektů funguje jen první minutu; navíc záře a kroužky žijí jen 1 snímek místo své délky.
+- Směr opravy: GLOW/POP nechat v `keep` do vypršení `life` a pak vrátit do `free` jako ostatní druhy.
 
-### [B-50] Bedny a zrní za plotem finální arény propadnou, bedna sebraná ve vítězné animaci se neotevře
+### [B-68] Záblesk obrazovky zamrzne, když hra stojí (vítězství 3 s v bílém závoji)
 - Závažnost: vysoká
-- Kategorie: logika / obsah
-- Kde: `run.py:317` `spawn_boss` (aréna kolem hráče), `clamp_to_arena`, `_victory_tick` (`magnet_all`), `pending_chests` se po vítězství už neotevírají
-- Co se děje: když přiletí Zombie Kohout, vznikne aréna o poloměru 430 px. Bedna z elity, která leží kousek za plotem, je pak nedosažitelná, protože plot hráče nepustí. Ve vítězné animaci ji magnet sice přitáhne, ale bedna se už neotevře a odměna (evoluce nebo upgrade) se ztratí bez jakékoli zprávy.
-- Jak se to projeví / kdy: oba módy v okamžiku příletu finálního bosse. V rychlém módu přichází poslední elita ve 2:08 a boss ve 2:30, takže bedna často ještě leží na zemi.
-- Důkaz: 24 runů (3 zvířata × 2 módy × 4 seedy): **v 16 z nich byla v okamžiku vzniku arény aspoň jedna bedna víc než 20 px za plotem**. V 9 runech ležela jen 27–310 px za plotem, tedy na dohled. V rychlém módu zůstalo za plotem typicky 1,5–3,5 úrovně XP (`xp_beyond` 300–600 při `xp_next` ~150). Ve 2 runech skončil run se sebranou, ale neotevřenou bednou (`pending_chests_at_end = 1`).
+- Kategorie: game feel/efekty
+- Kde: `game/world/run.py:958` (`flash_t` ubývá jen ve stavu playing), `game/world/render.py:179–184`
+- Co se děje: po porážce finálního bosse je celá vítězná animace zahalená bílým závojem (alfa 110). Totéž v pauze hned po kokrhání a pod bednou s evolucí.
+- Jak se to projeví / kdy: každá výhra (s výchozím nastavením záblesků).
+- Důkaz: 6/6 výher: `flash_t = 0.150` ve všech 181 ticích `victory_anim`. Pauza 5 s po kokrhání: `flash_t` stále 0,15. Bedna s evolucí otevřena s `flash_t = 0.2`. Snímek vítězné animace je celý vybledlý.
 - Jistota: ověřeno během běhu
-- Proč to vadí: hráč vidí bednu za plotem a nemůže pro ni dojít. Evoluce mu propadne zrovna před nejtěžším soubojem.
-- Směr opravy: při vzniku arény stáhnout bedny (a případně XP) dovnitř, nebo je rovnou vyřešit. Po vítězství nevyřízené bedny aspoň převést na mince.
+- Proč to vadí: vrchol hry (východ slunce) vypadá jako chyba displeje.
+- Směr opravy: odečítat `flash_t` i ve stavech victory_anim/dying/paused/levelup/chest, nebo ho při změně stavu nulovat.
 
-### [B-51] Rychlý mód přerušuje hru level-upem nebo bednou zhruba každých 6 sekund
+### [B-69] Boss je v pozdní hře skoro pořád bílý
+- Závažnost: vysoká
+- Kategorie: grafika/animace
+- Kde: `game/world/run.py:526–528` (`e.flash = 0.09` při každém zásahu), `render.py:482`
+- Co se děje: bílý zásahový sprite se obnovuje každým zásahem, takže boss vypadá jako bílá silueta. Zmizí tónování variant (Mlhoš, Kmotr, Yetti, Robokohout) i vzhled fází.
+- Jak se to projeví / kdy: plný mód od Vlčí Alfy, nejvíc finální boss.
+- Důkaz: podíl ticků s bílým spritem: finální boss 63 % / 92 % (plný mód), Vlčí Alfa 51–74 %, rychlý mód 12–21 %; elity 17–23 %. Snímek fáze 2: kohout jako bílá skvrna.
+- Jistota: ověřeno během běhu
+- Proč to vadí: nejdůležitější souboj ztrácí vzhled a čitelnost.
+- Směr opravy: u bossů/elit omezit frekvenci záblesku (např. max 1× za 0,3 s) nebo použít jen krátký tint.
+
+### [B-70] Finální boss přiletí pod HUD, hlášky bossů jsou schované pod ikonami
 - Závažnost: střední
-- Kategorie: game feel / balanc
-- Kde: `run.py:90` `xp_mult = 1.8` pro quick/daily, `xp_needed()`
-- Co se děje: v rychlém módu hra ustavičně zastavuje na výběr karet. Mezi pauzami je jen pár sekund hraní.
-- Jak se to projeví / kdy: celý rychlý mód, nejvíc v 1. a 2. minutě. Plný mód má zhruba poloviční frekvenci.
-- Důkaz: hen/quick: pauzy za minutu {0: 8, 1: 11, 2: 10}, celkem **29 pauz za 3 minuty**. Daily: 31. Plný mód 4–9 za minutu.
-- Jistota: ověřeno během běhu (bot)
-- Proč to vadí: 3minutový mód má být svižný, ale působí trhaně. Na telefonu je to navíc pokaždé 0,6 s zámek, joystick se uvolní a pak se musí znovu chytit.
-- Směr opravy: snížit násobič XP v rychlém módu a místo toho dát silnější karty (vyšší rarita), nebo spojit víc čekajících level-upů do jedné obrazovky.
+- Kategorie: UI/UX
+- Kde: `run.py:385` (spawn `p.y - 300` → obrazovka y≈180), `render.py:844–849` (bublina `y ≥ th+60`), `hud.py` (sloty y 82–158, boss bar y 182)
+- Co se děje: kohout se objeví přesně za svým ukazatelem zdraví, úvodní hláška překrývá „BOSS!“ a řádky zbraní, poslední slova („Kikiri… kí…“) jsou za ikonami zbraní.
+- Důkaz: snímky v 0,4 s a 2,0 s po příletu a během vítězné animace – text bubliny nečitelný.
+- Jistota: ověřeno během běhu
+- Proč to vadí: dramatický vstup a vtip bossů hráč nevidí.
+- Směr opravy: spawnovat níž (pod pásem HUD) a bubliny clampovat pod spodní okraj HUD.
 
-### [B-52] Placená a odemykací zvířata jsou slabší než startovní slepice
+### [B-71] Klávesa S (pohyb dolů) = Skip v level-upu, mezerník (kokrhání) zavírá bednu
 - Závažnost: střední
-- Kategorie: balanc
-- Kde: `game/data/characters.py` (Kachna hp 0.7, Páv xp_req 1.25), startovní zbraně v `data/weapons.py`
-- Co se děje: zvíře koupené za vejce nebo získané výzvou vyhrává výrazně méně často než zdarma dostupná Božena.
-- Jak se to projeví / kdy: rychlý mód, Farma, Normal, bez Hnízda.
-- Důkaz: 8 seedů na zvíře, výhry: **slepice 6/8, krocan 3/8, kachna 1/8 (500 vajec), páv 1/8 (odměna za výzvu)**. Páv navíc prohrál na všech 5 mapách (0/5) a Kachna na 3 z 5.
-- Jistota: ověřeno během běhu (bot, kituje, takže výsledky jsou orientační)
-- Proč to vadí: odemčení nové postavy má být odměna. Tady je to krok dolů a hráč se k Boženě vrátí.
-- Směr opravy: přeměřit slabiny (70 % HP u Kachny, +25 % XP u Páva) proti síle startovních zbraní (`tools/dps_bench.py`).
+- Kategorie: UI/UX (ovládání)
+- Kde: `ui/overlays.py:110` (`key=pygame.K_s`), `core/input.py:66`, zámek jen pro dotyk `overlays.py:43`, bedna `overlays.py:308–313`
+- Co se děje: hráč na PC, který klepe S pro pohyb dolů, dvěma stisky zahodí level-up za pár mincí.
+- Důkaz: sonda: S v 0,05 s → „Opravdu?“, S v 0,45 s → stav playing, pending 1→0, mince 0→5.
+- Jistota: ověřeno během běhu
+- Proč to vadí: ztracená karta bez úmyslu; README přitom WASD i S=skip uvádí současně.
+- Směr opravy: jiná klávesa pro Skip (např. X) a zámek 0,6 s i pro klávesy.
 
-### [B-53] Boss rush silně závisí na zvířeti, první boss trvá u některých přes minutu
+### [B-72] Elity za plotem arény zmizí i s bednou
 - Závažnost: střední
-- Kategorie: balanc / bossové
-- Kde: `director.py` (boss rush: spawn ×0,35, `ELITES_FULL` platí i v rushi), `scenes/game.py:27` (bonus 8 level-upů)
-- Co se děje: po 8 bonusových level-upech skoro nechodí XP. Postavy se slabou startovní zbraní se pak s prvním bossem (Pan Liška Špión, 1 500 HP) tahají přes minutu a na druhém zemřou.
-- Jak se to projeví / kdy: týdenní boss rush (Farma, Normal, zvíře podle `last_char`).
-- Důkaz: výhry 2/7 (husa, krocan). Délka souboje se Špiónem: páv **98,5 s**, tučňák **78,8 s**, kachna 71 s, krocan 34 s, husa 19 s. Páv i tučňák padli na Králíkovi.
-- Jistota: ověřeno během běhu (bot)
-- Proč to vadí: týdenní výzva je s polovinou zvířat skoro nehratelná a hráč to dopředu neví.
-- Záměr? V boss rushi se objevují i elity z plného módu (obří liška ve 0:50 a dál). To je asi jediný zdroj beden a evolucí, ale v popisu módu to není.
-- Směr opravy: škálovat HP bossů podle síly buildu, případně přidat XP z bossů nebo víc bonusových level-upů.
-
-### [B-54] Finální boss rychlého módu padne za 15–40 s, fáze skoro nejsou vidět
-- Závažnost: střední
-- Kategorie: bossové / balanc
-- Kde: `run.py:325` `if final and quick: hp *= 0.1`
-- Co se děje: hlavní souboj rychlého módu je s průměrným buildem hotový dřív, než boss předvede útoky. Fáze 1 vystřelí jedno kokrhání, fáze 2 a 3 trvají pár sekund.
-- Jak se to projeví / kdy: rychlý mód a denní výzva, Farma a Hory.
-- Důkaz: délky souboje (slepice) 14,7 / 25,1 / 28,8 / 38,1 s, krocan 25,2 s, kachna (Továrna) 24,7 s. V plném módu trvá 60–290 s. Samotné přechody fází s nesmrtelností zaberou 2 × 1,6 s a intro 1,2 s.
-- Jistota: ověřeno během běhu (bot)
-- Proč to vadí: vrchol 3minutového módu působí jako mini-boss a obsah fází 2 a 3 hráč v rychlém módu skoro nevidí.
-- Směr opravy: zvednout HP rychlé verze (např. 0,15–0,2), nebo zkrátit fáze, aby se každá stihla ukázat.
-
-### [B-55] V plném módu je build hotový minuty před koncem, zbytek level-upů jen léčí
-- Závažnost: střední
-- Kategorie: balanc / obsah vs. délka módu
-- Kde: `progression.has_choices`, `run._open_levelup` (automatické léčení)
-- Co se děje: všechny zbraně jsou vyvinuté a pasivky na maximu. Další level-upy se vyřeší samy (+35 % zdraví) a progrese končí.
-- Jak se to projeví / kdy: plný mód, Farma, Normal.
-- Důkaz: build kompletní: krocan **7:08**, slepice 9:11, husa 9:27. Potom 24 / 16 / 22 automatických level-upů. Konečná úroveň 59–74.
-- Jistota: ověřeno během běhu (bot)
-- Proč to vadí: poslední 3–4 minuty (včetně finálního bosse) nepřinášejí žádné rozhodování. Rostoucí XP bar ztrácí smysl.
-- Směr opravy: strmější XP křivka po ~úr. 40, nebo nějaký trvalý odbyt pro level-upy (např. malé procentní bonusy).
-
-### [B-56] Boss rush spotřebuje bonus za brzkou smrt a ukáže falešný banner
-- Závažnost: drobná
 - Kategorie: logika
-- Kde: `scenes/game.py:67` (`if app.save["rubber_band"] and cfg.bonus_levels`), `build_config` (bossrush má bonus 8)
-- Co se děje: když hráč zemře před 1:30 a pak spustí boss rush, objeví se „Bonus na rozjezd: +1 úroveň!“. Úroveň navíc ale nedostane (rush má pevných 8) a nárok na bonus se smaže.
-- Jak se to projeví / kdy: brzká smrt v rychlém nebo plném módu, potom boss rush.
-- Důkaz: podmínka hlídá jen `cfg.bonus_levels`, ne mód. V `build_config` je pro bossrush `bonus = 8` nezávisle na `rubber_band`.
-- Jistota: podle kódu (neověřeno)
-- Proč to vadí: nepravdivá zpráva a ztracený bonus.
-- Směr opravy: mazat příznak a ukazovat banner jen v módech quick/full.
+- Kde: `run.py:371–383` (`e.alive = False` pro ne-bosse za plotem), `data/waves.py` ELITES_FULL (555 s, 585 s)
+- Co se děje: elita, která jde k hráči, při příletu finálního bosse zmizí v obláčku a její bedna (šance na evoluci) propadne bez zprávy.
+- Důkaz: 28 runů: 33 elit naživu při vzniku arény, 21 smazáno. Plný mód: ztráta bedny v 8 ze 14 runů (elity se objeví 15–45 s před bossem).
+- Jistota: ověřeno během běhu
+- Proč to vadí: stejný typ ztráty odměny, jaký opravovalo B-50.
+- Směr opravy: elity přenést do arény jako mini-bosse, nebo jejich bednu vysypat dovnitř.
 
-### [B-57] Výhra v boss rushi odemyká další mapu i obtížnost Hard
-- Závažnost: drobná
-- Kategorie: spec mismatch (záměr?)
-- Kde: `progression.apply_results` (`if run.victory:` vyjímá jen `daily`)
-- Co se děje: vítězný boss rush (vždy Farma, Normal) odemkne Temný les a Hard, přestože se v něm nehraje mapa ani přežití.
-- Jak se to projeví / kdy: první výhra v boss rushi.
-- Důkaz: PLAN uvádí „Hard se odemkne výhrou na Normal“ a „mapy výhrou na předchozí mapě“. Podmínka vynechává jen denní výzvu.
-- Jistota: podle kódu (neověřeno)
-- Proč to vadí: obchází zamýšlenou cestu odemykání. Je to ale možná záměr.
-- Směr opravy: rozhodnout, zda boss rush počítat jako „výhru na mapě“. Pokud ne, vyjmout ho stejně jako daily.
+### [B-73] Kokrhání se v pozdní hře nabíjí každých 1,4 s
+- Závažnost: střední
+- Kategorie: balanc / game feel
+- Kde: `run.py:582` (nabití za zabití), `run.py:870–899` (1 s nesmrtelnost, omráčení 2,2 s, `vibrate(14)`)
+- Co se děje: special se mění v kulomet: každou chvíli „KIKIRIKÍ!“, cuknutí kamery o 14 px a všechny lišky v okolí trvale omráčené.
+- Důkaz: kokrhání při každém nabití, plný mód: Kohout v 9. minutě 43×/min, nesmrtelný 68 % času; slepice 21×/min, 34 %. 217 ticků s kickem kamery > 10 px. (Na výsledek bota to vliv nemělo.)
+- Jistota: ověřeno během běhu (bot)
+- Proč to vadí: special ztrácí váhu a obrazovka pravidelně cuká.
+- Směr opravy: minimální cooldown kokrhání nebo rostoucí cena nabití s časem.
 
-### [B-58] Modifikátor „Obři“ zvětší jen kolizi, ne vzhled
-- Závažnost: drobná
-- Kategorie: spec mismatch / grafika
-- Kde: `run.py:288` (`e.r *= 1.25`). Sprite se neškáluje (`render._entities`).
-- Co se děje: denní výzva „Nepřátelé jsou větší…“ ale lišky vypadají stejně. Jen narážejí a zraňují o ~3–5 px dál od okraje spritu.
-- Jak se to projeví / kdy: denní výzva s modifikátorem Obři (1 ze 6 dní).
-- Důkaz: v renderu není žádné škálování podle `giants`. `grep giants` najde jen HP, XP a poloměr.
-- Jistota: podle kódu (neověřeno)
-- Proč to vadí: slib z popisu se nesplní a zásah „ze vzduchu“ působí nefér.
-- Směr opravy: předrenderovat zvětšené sprity (nearest), nebo upravit popis.
+### [B-74] Rychlý mód: až 7 level-up obrazovek za sebou, hlavně během bosse
+- Závažnost: střední
+- Kategorie: game feel / balanc (záměr? – B-51)
+- Kde: `run.py:1035–1042`, `run.py:1070–1080`
+- Co se děje: přerušení je méně, ale obrazovek stejně; po 8 s hraní přijde řetěz 5–7 karet, často v souboji s bossem.
+- Důkaz: 30–34 obrazovek za ~3,5 min; řetězy (čas, počet): (149 s, 5), (159 s, 6), (174 s, 7), (175 s, 7).
+- Jistota: ověřeno během běhu (bot)
+- Proč to vadí: souboj s finálním bossem se rozpadá na klikání karet.
+- Směr opravy: opravdu sloučit čekající level-upy do jedné obrazovky (víc karet / vyšší rarita).
 
-### [B-59] „Šťastný den“ slibuje vyšší raritu všech karet, 42 % karet je ale běžných
-- Závažnost: drobná
-- Kategorie: spec mismatch / UI text
-- Kde: `progression.roll_rarity` (luck ×2), popis v `data/meta.py:95`
-- Co se děje: s modifikátorem padá epická karta na 18 %, vzácná na 40 % a běžná pořád na **42 %**.
-- Důkaz: `r < 0.045*4 → epická`, `r < 0.18 + 0.20*2 → vzácná`, jinak běžná.
-- Jistota: podle kódu (výpočet)
-- Proč to vadí: hráč uvidí běžné karty a bude si myslet, že modifikátor nefunguje.
-- Směr opravy: buď opravdu zvednout každou kartu o stupeň, nebo text změnit na „vzácné karty padají častěji“.
+### [B-75] Sebraná bedna se otevře až za ~5 s, bez indikace
+- Závažnost: drobná · Kategorie: UI/UX · Kde: `run.py:1036–1042`, `hud.py` („+N“ jen pro level-upy)
+- Co se děje / důkaz: zpoždění sebrání→otevření medián 4,9 s, max 7,8 s (33 ze 46 beden > 3 s). Hráč neví, že bedna čeká. · Jistota: ověřeno · Směr: ikonka čekající bedny v HUD.
 
-### [B-60] Kachna je o 40 % rychlejší i v závějích a na oleji, ne jen ve vodě a na ledu
-- Závažnost: drobná
-- Kategorie: pohyb / spec mismatch
-- Kde: `player.py:118` (`zone_mult < 1.0 or self.on_ice` → 1,4)
-- Co se děje: pasivka „Ve vodě a na ledu o 40 % rychlejší“ se spustí v jakékoli zpomalující zóně: v závěji (Hory) i na oleji (Továrna).
-- Jistota: podle kódu (neověřeno)
-- Proč to vadí: nesoulad popisu s chováním. V Horách je Kachna nečekaně silná.
-- Směr opravy: kontrolovat druh zóny (puddle/ice), nebo upravit popis.
+### [B-76] Finální boss říká hlášky jiných fází
+- Závažnost: drobná · Kategorie: logika/text · Kde: `world/bosses.py:358–360`, `78–82`
+- Co se děje / důkaz: náhodné hlášky berou z celého seznamu: ve fázi 1 „Prší slepice!/krysy!/VYPOUŠTÍM ROBOLIŠKY“ a „TEĎ UŽ JSEM OPRAVDU NAŠTVANÝ!“, ve fázi 3 „Prší…“ i když nic nepadá. · Jistota: ověřeno · Směr: hlášky fází vyřadit z náhodného výběru.
 
-### [B-61] Bossové procházejí překážkami
-- Závažnost: drobná
-- Kategorie: pohyb / grafika
-- Kde: `bosses.py` `BossCtrl.move` (bez `push_out`). Běžní nepřátelé se z překážek vytlačují v `enemies.py`.
-- Co se děje: medvěd, alfa nebo kohout projdou stodolou či stromem. Špión se teleportuje „za hráče“ i do překážky (`p.x - p.dir_x * 95`).
-- Jistota: podle kódu (neověřeno vizuálně)
-- Proč to vadí: proti bossům překážky nekryjí, proti liškám ano. Bossové pak „plavou“ přes kulisy.
-- Záměr? U velkých bossů to může být úmysl (nezaseknou se), u Špiónovy teleportace do domu spíš ne.
-- Směr opravy: pro cíl teleportace a pro malé bosse použít `map.blocked` / `push_out`.
+### [B-77] Pozadí obrazovek menu každých 5,3 s poskočí
+- Závažnost: drobná · Kategorie: grafika · Kde: `scenes/base.py:319` (`off % BG_TILE`, řádky posunuté o půl dlaždice → svislá perioda 96 px)
+- Důkaz: plynulé snímky 0 px rozdílu, při přetečení 25 284 px rozdílných (vzor skočí o půl dlaždice). · Jistota: ověřeno · Směr: modulo 2×BG_TILE ve svislém směru.
 
-### [B-62] Zpomalení na bossovi odtikává jen při pohybu
-- Závažnost: drobná
-- Kategorie: logika
-- Kde: `bosses.py` `BossCtrl.move` (jediné místo, kde klesá `slow_t`/`freeze_t`)
-- Co se děje: ve stavech, kdy boss stojí (Králík míří, Medvěd dupe, Kohout se nadechuje, Špión je neviditelný), časovač zpomalení stojí. Zpomalení pak vydrží déle, než zbraň slibuje.
-- Jistota: podle kódu (neověřeno)
-- Proč to vadí: nekonzistentní a nečitelná síla zpomalovacích zbraní na bossy.
-- Směr opravy: odečítat časovače v `BossCtrl.update`, ne v `move`.
+### [B-78] Texty, které nesedí
+- Závažnost: drobná · Kategorie: UI text
+- Kde a co: `share.py:14–17,52` – po prohře „PADLA JSEM… Kurník je zase v bezpečí.“; `collection.py:150` „Ještě jsi to nepotkala“ (rod hráče); `shop.py:152` sezónní skin označený „vlastníš“, po sezóně zmizí.
+- Jistota: podle kódu · Směr: vítězné vtipy jen při výhře, neutrální formulace.
 
-### [B-63] Vyvolávání nepřátel obchází mobilní strop entit
-- Závažnost: drobná
-- Kategorie: výkon (mobil)
-- Kde: `run.py:430` sova (`< 400`), `bosses.py` déšť ve fázi 2 (`< 380`), Vlčí Alfa (6–9 vlků po 6,5–8,5 s bez stropu). `MAX_ENEMIES` je na telefonu 320.
-- Co se děje: na telefonu může boj s Alfou nebo s Kohoutem ve fázi 2 přesáhnout limit, na který je výkon laděný.
-- Jistota: podle kódu (výkon na zařízení neověřen)
-- Proč to vadí: riziko propadu FPS na slabších telefonech právě ve vrcholných soubojích.
-- Směr opravy: všude používat `MAX_ENEMIES` z configu.
+### [B-79] Jednorázové zadrhnutí při prvním zobrazení výsledků
+- Závažnost: drobná · Kategorie: výkon · Kde: `scenes/results.py:253–311` (pozadí po pixelech přes `set_at`)
+- Důkaz: PC 65–70 ms (výsledky), 34 ms (menu). Na telefonu odhad několikanásobek. · Jistota: měřeno na PC, telefon neověřen · Směr: předgenerovat při startu nebo kreslit po pruzích.
 
-### [B-64] Texty napsané natvrdo pro slepici a farmu
-- Závažnost: drobná
-- Kategorie: UI text
-- Kde a co:
-  - `scenes/game.py:186`: dialog oživení „Slepice padla…“ i pro Kohouta, Tučňáka a Krocana. Výsledky přitom už rozlišují PADLA/PADL.
-  - `scenes/results.py:137`: „Slunce vyšlo. **Farma** je zachráněna!“ i ve Městě, Horách, Továrně a v boss rushi.
-  - `data/bosses.py:48`: Kohout Mlhoš, Kmotr, Yetti i Robokohout ve fázi 2 hlásí „Prší slepice!“, přitom padají netopýři, krysy, sněžné nebo robo lišky.
-  - `scenes/game.py:243`: nápověda „Slepice střílí sama!“ (první run může být denní výzva za jiné zvíře).
-- Jistota: podle kódu
-- Proč to vadí: drobné, ale viditelné nedotažení po přidání dalších zvířat a map.
-- Směr opravy: dosazovat jméno zvířete a biomu, u variant bosse mít vlastní hlášku pro fázi 2.
-
-### [B-65] „Vyřadit“ přelosuje celou nabídku, takže funguje jako rerol zdarma
-- Závažnost: drobná
-- Kategorie: balanc (záměr?)
-- Kde: `progression.banish` (`run.offer = make_offer(run)`)
-- Co se děje: vyřazení jedné karty vymění všechny tři. Se 2 vyřazeními má hráč fakticky 2 rerolly navíc.
-- Jistota: podle kódu
-- Proč to vadí: rerol (Kostka osudu v Hnízdě) ztrácí hodnotu.
-- Směr opravy: nahradit jen vyřazenou kartu.
-
-### [B-66] Vítězný čas a skóre obsahují 3 s vítězné animace
-- Závažnost: drobná
-- Kategorie: UI / logika
-- Kde: `run.py:848` (`victory_anim` přičítá `self.time += dt`), `progression.score`, `records.best_time_*`
-- Co se děje: ve výsledcích je čas o 3 s delší, než kdy boss padl, a skóre roste o 15 bodů za „nic“.
-- Jistota: podle kódu
-- Proč to vadí: drobná nepřesnost v rekordech a v žebříčku denní výzvy.
-- Směr opravy: během `victory_anim` čas runu nezvyšovat.
+### [B-80] Dokumentace a popisy neodpovídají hře
+- Závažnost: drobná · Kategorie: spec mismatch
+- Co: README Kachna „70 % životů“ (hra 85 %); PLAN Páv „+25 % XP“ (hra 10 %), Android „SCALED | FULLSCREEN“ (hra škáluje sama), prázdné level-upy „mince + 5 %“ (hra 35 % léčení); výběr módu „3 minuty / 10 minut“ – naměřeno 2:52–6:12 a 10:38–12:05.
+- Jistota: ověřeno čtením a během běhu · Směr: aktualizovat texty.
 
 ## Co jsem nestihl / neověřil
-- Skutečné hraní člověkem: bot kituje, takže balanc (B-52 až B-55) je orientační, hlavně u Husy.
-- Android: klasický pygame 2.1, výkon v soubojích s mnoha vyvolanými nepřáteli (B-63), haptika, chování po návratu z pozadí.
-- Poslech zvuku a hudby: změřil jsem jen, že se nevyčerpají kanály (17 077 přehrání, 0 zahozených).
-- Plný mód na Hard/Nightmare a na Horách nebo v Továrně. Rychlý mód jsem otestoval na všech mapách.
-- Scény menu (Hnízdo, Obchod, Sbírka, Výzvy, Nastavení) jen na snímcích. Detailně je řešilo minulé kolo B-29 až B-48.
-- Vizuální ověření B-58, B-61 a B-62 ve hře (jsou jen z kódu).
+- Android (klasický pygame 2.1, výkon, haptika), hraní člověkem, poslech zvuku.
+- Plný mód na Hard/Nightmare; Hory/Továrna jen okrajově.
+- `tools/simulate.py` simuluje boss rush **bez** 10 bonusových level-upů (nepředává `bonus_levels`) – čísla z něj jsou pro rush zkreslená (s bonusem 12/21 výher, bez něj 3/14).
+- Pickupy mimo XP (mince ze Zlaté bomby) přerostou strop 380 až po 15. minutě (jen v uměle prodlouženém běhu).
 
 ## Témata, která se opakují
-- **Věci zůstávají ležet a ztrácejí se.** Pickupy nemizí, a proto naráží na strop (B-49). Aréna je odřízne (B-50). Bedny po vítězství propadnou (B-50). Chybí „úklid“ starých pickupů a pravidlo, co se stane s nevyzvednutou odměnou.
-- **Obsah laděný pro plný mód.** Rychlý mód má XP ×1,8, takže pauzy padají každých 6 s (B-51), a bosse ×0,1, takže padne za 15 s (B-54). Boss rush dává 8 level-upů a pak skoro nic (B-53). V plném módu je build hotový minuty před koncem (B-55). Každý mód potřebuje vlastní kontrolu, kolik progrese se do jeho délky vejde.
-- **Testováno hlavně se slepicí na Farmě.** Slabší placené postavy (B-52), texty pro slepici a farmu (B-64), pasivka Kachny v cizích zónách (B-60).
-- **Popis modifikátoru se liší od kódu.** Obři (B-58), Šťastný den (B-59) a obecně popisy zóny a pasivky (B-60).
-- **Výjimky pro bosse mimo společnou smyčku.** Bossové mají vlastní `move`. Chybí tam kolize s překážkami (B-61) a odečet zpomalení mimo pohyb (B-62). Co se přidá do smyčky nepřátel, bossové automaticky nedostanou.
+- **Nový kód bez úklidu stavu:** částice GLOW/POP se nevracejí do poolu (B-67), záblesk neubývá mimo „playing“ (B-68).
+- **Efekty laděné na jeden zásah, ne na pozdní hru:** zásahový záblesk bosse (B-69), kokrhání nabíjené zabitími (B-73).
+- **HUD a scéna soupeří o horní třetinu obrazovky:** příchod bosse a bubliny (B-70).
+- **Konec módu odřízne odměny:** elity za plotem (B-72), čekající bedny (B-75), dříve B-50.
