@@ -85,12 +85,20 @@ class App:
             self.win_size = (W, H)
             return
         if device.MOBILE:
-            # telefon: celá obrazovka, škálování logických 540×960 dělá GPU (SCALED) vč. dotyků
+            # Telefon: okno přes celý displej ve skutečném rozlišení, 540×960 škálujeme sami
+            # (pygame.SCALED v pygame 2.1 na Androidu nefunguje – byl vidět jen roh obrazu).
+            size = (0, 0)
             try:
-                self.window = pygame.display.set_mode((W, H), pygame.SCALED | pygame.FULLSCREEN)
+                info = pygame.display.Info()
+                if info.current_w > 0 and info.current_h > 0:
+                    size = (info.current_w, info.current_h)
+            except pygame.error:
+                pass
+            try:
+                self.window = pygame.display.set_mode(size, pygame.FULLSCREEN)
             except pygame.error:
                 self.window = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-            self.win_size = self.window.get_size()
+            self._refresh_window()
             return
         try:
             info = pygame.display.Info()
@@ -101,7 +109,7 @@ class App:
         s = min(avail_h / H, avail_w / W, 1.25)
         size = (int(W * s), int(H * s))
         self.window = pygame.display.set_mode(size, pygame.RESIZABLE)
-        self.win_size = self.window.get_size()
+        self._refresh_window()
 
     def toggle_fullscreen(self, on: bool | None = None) -> None:
         if self.headless or device.MOBILE:
@@ -112,15 +120,34 @@ class App:
                 self.window = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
             else:
                 self._open_window()
-            self.win_size = self.window.get_size()
+            self._refresh_window()
         except pygame.error:
             self._fullscreen = False
 
+    def _refresh_window(self) -> None:
+        """Po změně velikosti okna znovu načíst plochu displeje a rozměry."""
+        surf = pygame.display.get_surface()
+        if surf is not None:
+            self.window = surf
+        self.win_size = self.window.get_size()
+        self._vp = None
+        self._bars_dirty = True
+
     def viewport(self) -> tuple[int, int, int, int]:
+        vp = getattr(self, "_vp", None)
+        if vp is not None and vp[0] == self.win_size:
+            return vp[1]
         ww, wh = self.win_size
         s = min(ww / W, wh / H)
-        vw, vh = int(W * s), int(H * s)
-        return (ww - vw) // 2, (wh - vh) // 2, vw, vh
+        if device.MOBILE and s >= 1:
+            # celočíselné zvětšení = ostrý pixel art (pokud nezmenší obraz o víc než 15 %)
+            si = int(s)
+            if si / s >= 0.85:
+                s = si
+        vw, vh = max(1, int(W * s)), max(1, int(H * s))
+        res = ((ww - vw) // 2, (wh - vh) // 2, vw, vh)
+        self._vp = (self.win_size, res)
+        return res
 
     def to_logical(self, pos) -> tuple[float, float]:
         vx, vy, vw, vh = self.viewport()
@@ -201,11 +228,8 @@ class App:
             if e.type == pygame.QUIT:
                 self.running = False
                 continue
-            if e.type == pygame.VIDEORESIZE:
-                self.win_size = (e.w, e.h)
-                continue
-            if e.type == _WINDOWSIZECHANGED:
-                self.win_size = self.window.get_size()
+            if e.type in (pygame.VIDEORESIZE, _WINDOWSIZECHANGED):
+                self._refresh_window()
                 continue
             if e.type in _BACKGROUND_EVENTS:
                 self.on_background()
@@ -262,9 +286,14 @@ class App:
         if (vw, vh) == (W, H):
             self.window.blit(self.screen, (vx, vy))
         else:
-            if vx or vy:
+            if (vx or vy) and getattr(self, "_bars_dirty", True):
                 self.window.fill((0, 0, 0))
-            self.window.blit(pygame.transform.scale(self.screen, (vw, vh)), (vx, vy))
+                self._bars_dirty = False
+            try:
+                # škálovat rovnou do výřezu displeje (bez alokace mezisurface každý frame)
+                pygame.transform.scale(self.screen, (vw, vh), self.window.subsurface((vx, vy, vw, vh)))
+            except (pygame.error, ValueError, TypeError):
+                self.window.blit(pygame.transform.scale(self.screen, (vw, vh)), (vx, vy))
         pygame.display.flip()
 
     def safe(self, fn, *a) -> bool:
