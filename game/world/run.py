@@ -118,9 +118,10 @@ class Run:
         self.particles = ParticleSystem(MAX_PARTICLES)
         self.director = Director(self)
 
-        self.level = 1
+        # bonusové levelupy (boss rush, rubber-banding) zvednou úroveň hned – overlay pak ukazuje 2, 3, …
+        self.level = 1 + max(0, cfg.bonus_levels)
         self.xp = 0.0
-        self.xp_next = self.xp_needed(1)
+        self.xp_next = self.xp_needed(self.level)
         self.pending_levelups = cfg.bonus_levels
         self.pending_chests: list[str] = []
         self.offer = None
@@ -155,6 +156,7 @@ class Run:
         self.flash_count = 0
         self.flashes_on = True
         self.revived = False
+        self.gave_up = False
         self.victory = False
         self.result = None
         self.show_damage = True
@@ -285,6 +287,10 @@ class Run:
         if "giants" in self.mods and not d.elite:
             e.r *= 1.25
         self.enemies.append(e)
+        if not self.headless and self.camera.on_screen(x, y, -10):
+            # objevení přímo na obrazovce (okraj arény, vyvolání) – vylézt z hlíny, ne se „zhmotnit“
+            self.particles.puff(x, y + 6, 4, (120, 96, 72), 50, 10)
+            self.add_ring(x, y + 4, 4, e.r * 1.6, 0.35, (170, 120, 210), 3)
         return e
 
     def spawn_prop(self, x: float, y: float, ref):
@@ -374,6 +380,7 @@ class Run:
         self.sfx("roar")
         self.shake(0.5)
         self.camera.vibrate(12)
+        self.camera.haptic(80)
 
     def boss_killed(self, ctrl) -> None:
         e = ctrl.e
@@ -389,6 +396,7 @@ class Run:
         self.flash((255, 255, 255), 0.15, important=True)
         self.shake(0.8)
         self.camera.vibrate(16)
+        self.camera.haptic(120)
         self.coins += 25 if bid != "zombie_rooster" else 100
         if ctrl is self.final_boss or (self.cfg.mode == "bossrush" and not self.director.rush and not self.bosses):
             self.final_boss = None
@@ -626,8 +634,8 @@ class Run:
     # --- cílení ------------------------------------------------------------------------------
     def nearest_enemy(self, x: float, y: float, max_d: float = 600.0, exclude: set | None = None):
         if exclude:
-            return self.grid.nearest(x, y, max_d, lambda o: not o.prop and o.alive and o.id not in exclude)
-        return self.grid.nearest(x, y, max_d, _not_prop)
+            return self.grid.nearest(x, y, max_d, lambda o: _targetable(o) and o.id not in exclude)
+        return self.grid.nearest(x, y, max_d, _targetable)
 
     def targets(self, x: float, y: float, max_d: float, n: int) -> list:
         """n cílů; při menším počtu nepřátel se cíle opakují (vše dopadne i na osamoceného bosse)."""
@@ -641,7 +649,7 @@ class Run:
         md2 = max_d * max_d
         cand = []
         for e in buf:
-            if e.alive and not e.prop:
+            if e.alive and not e.prop and e.alpha >= 128:
                 d2 = (e.x - x) ** 2 + (e.y - y) ** 2
                 if d2 < md2:
                     cand.append((d2, e))
@@ -797,6 +805,7 @@ class Run:
         self.sfx("crow", 1.0)
         if self.final_boss is not None and isinstance(getattr(self.final_boss, "wind", None), float):
             self.final_boss.wind = 0.0
+            self.final_boss.inhale = 0.0
         return True
 
     # =====================================================================================
@@ -935,14 +944,14 @@ class Run:
     def _open_levelup(self) -> None:
         from .. import progression
         if not progression.has_choices(self):
+            # build je kompletní – levelup jen vyléčí a hru nepřeruší
             n = self.pending_levelups
             self.pending_levelups = 0
-            gain = n * (5 + self.level // 5)
-            self.coins += gain
             p = self.player
-            p.heal(p.stats.max_hp * 0.05 * n)
-            self.add_text(p.x, p.y - 46, f"Úr. {self.level}  +{gain} mincí", (255, 214, 70), 2, 1.2)
-            self.sfx("coin", 0.6)
+            p.heal(p.stats.max_hp * progression.HEAL_FILL * n)
+            self.add_text(p.x, p.y - 46, f"Úr. {self.level}  +zdraví", (120, 255, 140), 2, 1.2)
+            self.particles.stars(p.x, p.y - 20, 6, (120, 255, 140), 90)
+            self.sfx("heal", 0.6)
             return
         self.state = "levelup"
         self.offer = progression.make_offer(self)
@@ -1089,7 +1098,7 @@ class Run:
                     if not lst:
                         continue
                     for e in lst:
-                        if not e.alive:
+                        if not e.alive or e.alpha < 128:
                             continue
                         ex = e.x - pr.x
                         ey = e.y - pr.y
@@ -1278,5 +1287,6 @@ class Run:
         return [(w.id, w.level, w.damage_dealt, w.evolved) for w in self.weapons]
 
 
-def _not_prop(o) -> bool:
-    return not o.prop and o.alive
+def _targetable(o) -> bool:
+    """Cíl auto-aimu: živý nepřítel, ne sud, ne neviditelný boss (Pan Liška Špión v mlze)."""
+    return not o.prop and o.alive and o.alpha >= 128

@@ -28,9 +28,20 @@ def build_config(app, character: str, biome: str, mode: str, difficulty: str = "
         bonus = 8
     season = progression.season_for(None, save.settings.get("season", "auto"))
     skin = save["skin"].get(character)
+    if not progression.skin_usable(save, skin):
+        skin = None            # sezónní skin po skončení sezóny se nenosí
     return RunConfig(character=character, biome=biome, mode=mode, difficulty=difficulty,
                      seed=seed if seed is not None else random.randrange(1 << 30), modifiers=modifiers, meta=meta,
                      rerolls=rerolls, banishes=2, bonus_levels=bonus, skin=skin, season=season)
+
+
+def replay_allowed(app, cfg: RunConfig) -> bool:
+    """Smí se run zopakovat se stejným nastavením? Denní výzva zapůjčuje zvíře i mapu jen na jeden pokus."""
+    s = app.save
+    if cfg.mode == "daily":
+        return False
+    return (cfg.character in s["unlocked_chars"] and cfg.biome in s["unlocked_maps"]
+            and cfg.difficulty in s["unlocked_diffs"])
 
 
 class GameScene(Scene):
@@ -125,17 +136,20 @@ class GameScene(Scene):
             self.joy.release()
 
     def give_up(self) -> None:
+        self.run.gave_up = True
         self.run.state = "dead"
         self.run.revived = True
         self.death_prompted = True
         self._finish()
 
     def restart(self) -> None:
+        if not replay_allowed(self.app, self.cfg):
+            # denní výzva / zapůjčené zvíře či mapa → zpět na výběr (žádné obcházení odemykání)
+            from .select import SelectScene
+            self.app.switch(SelectScene(self.app))
+            return
         cfg = build_config(self.app, self.cfg.character, self.cfg.biome, self.cfg.mode, self.cfg.difficulty,
-                           self.cfg.modifiers, None if self.cfg.mode != "daily" else self.cfg.seed)
-        if self.cfg.mode == "daily":
-            cfg.mode = "quick"     # denní výzva má jen jeden pokus – restart je obyčejný run
-            cfg.modifiers = ()
+                           self.cfg.modifiers)
         self.app.switch(GameScene(self.app, cfg))
 
     # --- update --------------------------------------------------------------------------------

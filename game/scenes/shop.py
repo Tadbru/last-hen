@@ -26,7 +26,7 @@ class ShopScene(Scene):
             self.ci = owned.index(self.save["last_char"])
         self.add(Button((14, 150, 56, 80), "", lambda: self.cycle(-1), icon="back", style="dark"))
         self.add(Button((W - 70, 150, 56, 80), "", lambda: self.cycle(1), icon="play", style="dark"))
-        self.season = progression.season_for(None, self.save.settings.get("season", "auto"))
+        self.season = progression.season_for(None, "auto")     # skutečná sezóna podle data
         self.rows = []
         y = 262
         for s in SKINS:
@@ -47,7 +47,7 @@ class ShopScene(Scene):
         self._sync()
 
     def available(self, s) -> bool:
-        return s["id"] in self.save["skins_owned"] or (s["season"] is not None and s["season"] == self.season)
+        return progression.skin_usable(self.save, s["id"])
 
     def _sync(self) -> None:
         eq = self.save["skin"].get(self.char)
@@ -135,7 +135,7 @@ class ShopScene(Scene):
         img = anim.frames[0][int(self.t * 3) % 2]
         surf.blit(img, img.get_rect(midbottom=(W // 2 - 60, 228)))
         hat_id = self.save["skin"].get(self.char)
-        if hat_id and hat_id in assets.sprites.hats:
+        if hat_id and hat_id in assets.sprites.hats and progression.skin_usable(self.save, hat_id):
             from ..world.render import HAT_ANCHOR
             from ..config import PX
             hx, hy = HAT_ANCHOR.get(self.char, (7, 0))

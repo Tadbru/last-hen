@@ -40,7 +40,7 @@ def main() -> None:
         print("saved", name)
 
     sc = menu.MenuScene(app)
-    menu.MenuScene._login_checked = True
+    menu.MenuScene.suppress_login = True
     app.set_scene(sc)
     shot("menu")
     for name, cls in (("select", select.SelectScene), ("nest", nest.NestScene), ("collection", collection.CollectionScene),

@@ -106,14 +106,21 @@ class ChicksWeapon(Weapon):
         super().__init__(*a, **k)
 
     def on_refresh(self) -> None:
+        # při vylepšení zachovat stávající kuřata (dřív se všechna teleportovala ke slepici)
         n = int(self.s["count"])
-        for c in self.chicks:
-            c.alive = False
-        self.chicks = []
-        for i in range(n):
-            c = Chick(self.run, self, i)
-            self.chicks.append(c)
+        alive = [c for c in self.chicks if c.alive]
+        while len(alive) > n:
+            alive.pop().alive = False
+        while len(alive) < n:
+            c = Chick(self.run, self, len(alive))
+            alive.append(c)
             self.run.allies.append(c)
+        rooster = bool(self.s.get("rooster"))
+        for i, c in enumerate(alive):
+            c.slot = i
+            c.weapon = self
+            c.spr = assets.sprites.small["rooster_chick" if rooster else "chick"]
+        self.chicks = alive
 
     def update(self, dt: float) -> None:
         pass   # kuřata se aktualizují jako spojenci

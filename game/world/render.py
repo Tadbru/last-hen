@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import time
 
 import pygame
 
@@ -100,9 +101,13 @@ class RunRenderer:
         return s
 
     # --- hlavní kreslení --------------------------------------------------------------------------
-    def draw(self, surf: pygame.Surface, dt: float) -> None:
+    def draw(self, surf: pygame.Surface, dt: float | None = None) -> None:
         run = self.run
-        self.t += dt
+        # animace podle skutečného času, ne podle počtu vykreslení
+        now = time.perf_counter()
+        last = getattr(self, "_last_draw", None)
+        self._last_draw = now
+        self.t += min(0.1, now - last) if last is not None else 0.0
         cam = run.camera
         ox, oy = cam.ox, cam.oy
         self._ground(surf, ox, oy)
@@ -224,7 +229,9 @@ class RunRenderer:
                     h = (1 - k) ** 1.5 * 520
                     surf.blit(spr, (x - spr.get_width() / 2, y - spr.get_height() - h))
                 elif t.kind == "drop":
-                    spr = assets.sprites.enemies["zchick"].frames[0][0]
+                    from ..data.enemies import ENEMIES
+                    d = ENEMIES.get(t.data or "zchick", ENEMIES["zchick"])
+                    spr = assets.sprites.enemies[d.sprite].frames[0][0]
                     h = (1 - k) * 420
                     surf.blit(spr, (x - spr.get_width() / 2, y - spr.get_height() - h))
                 elif t.kind == "stamper":
@@ -414,24 +421,30 @@ class RunRenderer:
         anim = assets.sprites.players[run.char.id]
         f = (int(p.anim) % 2) if p.moving else 0
         face = p.face
-        img = anim.flash[face][f] if p.flash > 0 else anim.frames[face][f]
         x, y = p.x - ox, p.y - oy
         if p.dead:
             return
-        if p.invuln > 0 and p.flash <= 0 and int(self.t * 16) % 2 == 0 and run.state == "playing":
-            alpha_img = img.copy()
-            alpha_img.set_alpha(120)
-            img = alpha_img
         sl = p.slide if run.char.special == "slide" else 0.0
-        if sl > 0.55:
-            key = (face, f, p.flash > 0)
-            r = self._slide_rot.get(key)
-            if r is None:
-                r = pygame.transform.rotate(img, -80 if face == 0 else 80)
-                self._slide_rot[key] = r
-            img = r
-            for _ in range(1):
-                run.particles.emit(p.x - p.vx * 0.05, p.y + 6, 0, 0, 0.3, 2, (230, 240, 255), 6)
+        if sl > 0.55 and (p.vx or p.vy):
+            # klouzání po břiše: tělo leží ve směru jízdy, břichem dolů (úhel kvantovaný na 16 směrů)
+            ang = math.atan2(p.vy, p.vx)
+            right = math.cos(ang) >= 0
+            face = 0 if right else 1
+            q = int(round(ang / (math.tau / 16))) % 16
+            key = (face, q, p.flash > 0)
+            img = self._slide_rot.get(key)
+            if img is None:
+                base = anim.flash[face][0] if p.flash > 0 else anim.frames[face][0]
+                a = q * 360 / 16
+                rot = -90 - a if right else 90 - (a - 180)
+                img = pygame.transform.rotate(base, rot)
+                self._slide_rot[key] = img
+        else:
+            img = anim.flash[face][f] if p.flash > 0 else anim.frames[face][f]
+        if p.invuln > 0 and p.flash <= 0 and int(self.t * 16) % 2 == 0 and run.state == "playing":
+            # průhlednost až na hotový (případně otočený) snímek – nikdy ne do cache
+            img = img.copy()
+            img.set_alpha(120)
         sq = clamp(p.sq, 0.75, 1.25)
         w0, h0 = img.get_size()
         if abs(sq - 1) > 0.02:

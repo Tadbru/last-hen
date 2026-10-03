@@ -173,3 +173,21 @@ Všech 7 bodů „Definice hotovo“ je splněno:
 - Stavy: mini-boss se při vzniku arény přenese dovnitř (dřív zmizel a zůstal v seznamu bossů –
   boss rush se pak zasekl), během vítězné animace se ruší dobíhající útoky a smrt ve stejném ticku
   jako výhra má přednost výhra, výsledek denní výzvy se zapisuje k datu výzvy (seed), ne k datu dohrání.
+
+### Druhá vlna oprav (celý report B-01 – B-28)
+- Výplňové level-upy jen léčí: když zbývá méně než 3 reálné volby, doplní se jediná karta „Kuřecí polévka“;
+  když není co vybrat vůbec, levelup hru nepřeruší a jen vyléčí 35 % zdraví (B-04, B-24).
+- B-05: haptika oddělená od trhnutí kamerou – vibruje jen zásah slepice a údery bossů (rozestup 0,35 s).
+- B-06: bonusové levelupy (boss rush, rubber-banding) zvedají úroveň; rubber-banding jen po skutečné smrti.
+- B-07/B-08/B-23: zprávy ve výsledcích po stránkách, bedna s dynamickou výškou řádků a menším písmem místo uříznutí.
+- B-09: neviditelný boss není cílem auto-aimu a projektily jím proletí.
+- B-11: klouzání tučňáka podle směru jízdy, průhlednost až po rotaci. B-26: částice v logice, animace podle času.
+- B-13: telegraf před kokrháním (nádech 0,8 s), vějířem vajec i šipkami Špióna; vítr 115 px/s s náběhem –
+  pomalejší než nejpomalejší zvíře, takže se mu dá ujít.
+- B-14: po denní výzvě a u zamčeného zvířete/mapy vede „Znovu“/Restart na výběr.
+- B-15: kontaktní poškození tučňáka škáluje s HP nepřítele. B-16: boss rush začíná na 1,5. efektivní minutě
+  a první boss přijde v 0:15. B-19: vlci Alfy přibíhají zpoza okraje, objevení na obrazovce má efekt.
+- B-20: na ledu se nohy hýbou jen při chůzi, otočení podle vstupu. B-21: v dešti padá správné zvíře biomu.
+- B-22: kuřata se při vylepšení neteleportují. B-25: PC – ztráta fokusu / minimalizace = pauza.
+- B-27: denní odměna se kontroluje při každém vstupu do menu, posun hodin zpět nic nedá.
+- B-28: sezónní skin jen v reálné sezóně podle data (vynucená sezóna mění jen vzhled světa).

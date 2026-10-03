@@ -40,6 +40,7 @@ _WINDOWSIZECHANGED = getattr(pygame, "WINDOWSIZECHANGED", -100)
 _BACKGROUND_EVENTS = {getattr(pygame, n) for n in ("APP_WILLENTERBACKGROUND", "APP_DIDENTERBACKGROUND")
                       if hasattr(pygame, n)}
 _FOREGROUND_EVENTS = {getattr(pygame, n) for n in ("APP_DIDENTERFOREGROUND",) if hasattr(pygame, n)}
+_FOCUS_LOST_EVENTS = {getattr(pygame, n) for n in ("WINDOWFOCUSLOST", "WINDOWMINIMIZED") if hasattr(pygame, n)}
 
 
 class App:
@@ -236,6 +237,13 @@ class App:
                 continue
             if e.type in _FOREGROUND_EVENTS:
                 self.on_foreground()
+                continue
+            if e.type in _FOCUS_LOST_EVENTS and not self.headless:
+                # PC: přepnutí do jiného okna / minimalizace → pauza (hudba hraje dál)
+                pause = getattr(self.scene, "pause", None)
+                if callable(pause):
+                    pause()
+                self.mouse_down = False
                 continue
             if e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_F3:

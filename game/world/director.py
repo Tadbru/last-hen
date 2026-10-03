@@ -22,7 +22,7 @@ class Director:
         if mode == "bossrush":
             self.bosses = []
             self.rush = list(BOSS_ORDER)
-            self.rush_t = 3.0
+            self.rush_t = 15.0        # čas na rozkoukání a výběr 8 bonusových karet
         else:
             self.bosses = list(WV.BOSSES_QUICK if self.quick else WV.BOSSES_FULL)
             self.rush = []
@@ -35,7 +35,7 @@ class Director:
 
     def eff_min(self) -> float:
         if self.run.cfg.mode == "bossrush":
-            return 4.0 + self.run.time / 60.0
+            return 1.5 + self.run.time / 60.0
         return self.run.time / 60.0 * self.time_scale
 
     # --- výběr nepřítele ------------------------------------------------------------------

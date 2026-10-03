@@ -50,14 +50,17 @@ class Camera:
             self.kick_y *= KICK_MAX / m
 
     def vibrate(self, power: float = 8.0, cap: float = 0.5) -> None:
-        """Krátké trhnutí kamerou + haptika telefonu (Android, s minimálním rozestupem)."""
-        self.vibrations += 1
-        if self.haptics:
-            from ..device import vibrate
-            vibrate(int(10 + power * 2.5))
+        """Krátké trhnutí kamerou (jen obraz – haptiku telefonu řeší Run.haptic)."""
         a = random.uniform(0, math.tau)
         self.kick(math.cos(a), math.sin(a), power)
         self.shake(0.25, cap)
+
+    def haptic(self, ms: int) -> None:
+        """Vibrace telefonu – jen při zásahu hráče a úderech bossů (rozestup hlídá device.vibrate)."""
+        if self.haptics:
+            from ..device import vibrate
+            self.vibrations += 1
+            vibrate(ms)
 
     def update(self, dt: float) -> None:
         self._t += dt

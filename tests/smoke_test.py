@@ -122,7 +122,7 @@ def all_scenes_and_buttons():
     a.save["gold"] = 99
     a.save["tokens"] = 5
     from game.scenes import challenges, collection, daily, menu, nest, select, settings, shop
-    menu.MenuScene._login_checked = True
+    menu.MenuScene.suppress_login = True
     for cls in (menu.MenuScene, select.SelectScene, nest.NestScene, collection.CollectionScene,
                 challenges.ChallengesScene, daily.DailyScene, shop.ShopScene, settings.SettingsScene):
         _click_all(a, cls, skip=("Smazat postup",))
@@ -231,14 +231,13 @@ def cards_reroll_skip_banish():
     run = Run(RunConfig(seed=4, rerolls=3, banishes=2))
     for _ in range(80):
         run.pending_levelups += 1
-        coins0 = run.coins
         run._open_levelup()
         if not progression.has_choices(run):
-            # všechno vylepšeno → levelup se vyřeší sám (mince + léčení) a hru nepřeruší
-            assert run.state == "playing" and run.pending_levelups == 0 and run.coins > coins0
+            # všechno vylepšeno → levelup jen vyléčí a hru nepřeruší
+            assert run.state == "playing" and run.pending_levelups == 0
             continue
         offer = run.offer
-        assert len(offer) == 3
+        assert 1 <= len(offer) <= 3
         r = random.random()
         if r < 0.1 and run.rerolls:
             assert progression.reroll(run)
@@ -248,18 +247,23 @@ def cards_reroll_skip_banish():
         elif r < 0.2:
             progression.skip(run)
             continue
-        progression.apply_card(run, run.offer[random.randrange(3)])
+        progression.apply_card(run, run.offer[random.randrange(len(run.offer))])
     assert len(run.weapons) <= 6 and len(run.passives) <= 6
-    # při plném buildu jsou nabízeny výplňové karty
+    # při plném buildu: výplň je jen léčení a levelup hru nepřeruší
     for w in run.weapons:
         if not w.evolved:
             w.set_level(8)
     for pid in list(run.passives):
         run.passives[pid] = 5
     run.banished.update(["egg", "crow_wave", "chick_army", "shuriken", "laser", "nest", "lightning", "stink",
-                         "wolf_howl", "sky_cake"])
+                         "wolf_howl", "sky_cake", "water_pistol", "beak_whip", "feather_shotgun", "sound_waves",
+                         "fan_tail", "fish"] + list(progression.PASSIVE_ORDER))
     offer = progression.make_offer(run)
-    assert len(offer) == 3
+    assert [c.kind for c in offer] == ["heal"], offer
+    run.player.hp = 10
+    run.pending_levelups = 2
+    run._open_levelup()
+    assert run.state == "playing" and run.pending_levelups == 0 and run.player.hp > 10
 
 
 def _boss_fight(boss: str, mode: str, win: bool) -> None:
@@ -477,7 +481,8 @@ def daily_and_weekly():
     gs = GameScene(a, cfg)
     a.set_scene(gs)
     assert cfg.bonus_levels == 8
-    for _ in range(400):
+    assert gs.run.level == 9, gs.run.level       # bonusové levelupy zvedají úroveň (dřív „Úroveň -6“)
+    for _ in range(1100):
         a.step(DT)
         if gs.run.state == "levelup":
             progression.apply_card(gs.run, gs.run.offer[0])
