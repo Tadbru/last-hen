@@ -340,7 +340,7 @@ class ChestOverlay(Overlay):
             font.draw(surf, "klepni pro otevření", (cx, cy + 90), C_TEXT, 2, "midtop", outline=C_OUTLINE)
             return
         # paprsky jednou „vystřelí“ z truhly a vyblednou (kreslené v art pixelech, zvětšené ×3)
-        rays = _chest_rays(self.t - self.open_t, self.t, evo)
+        rays = _chest_rays(self.t - self.open_t, evo)
         if rays is not None:
             surf.blit(rays, (0, 0))
         self.fx.draw(surf, 0, 0)
@@ -489,8 +489,9 @@ class PauseOverlay(Overlay):
 _RAYS: dict = {}
 
 
-def _chest_rays(age: float, t: float, evo: bool):
-    """Paprsky z truhly: při otevření vystřelí (rychle se prodlouží), chvíli svítí a vyblednou. None = už nejsou."""
+def _chest_rays(age: float, evo: bool):
+    """Paprsky z truhly: při otevření vystřelí do všech stran (rychle se prodlouží, netočí se), chvíli svítí
+    a vyblednou. None = už nejsou."""
     fade = 1.0 - max(0.0, (age - 0.5) / 0.9)
     if fade <= 0:
         return None
@@ -504,7 +505,7 @@ def _chest_rays(age: float, t: float, evo: bool):
     a0 = 70 if evo else 60
     col = (255, 120, 255, int(a0 * fade)) if evo else (255, 220, 90, int(a0 * fade))
     for i in range(12):
-        a = t * 0.8 + i * math.tau / 12
+        a = 0.2 + i * math.tau / 12
         pygame.draw.polygon(low, col, [(cx, cy), (cx + math.cos(a) * reach, cy + math.sin(a) * reach),
                                        (cx + math.cos(a + 0.15) * reach, cy + math.sin(a + 0.15) * reach)])
     big = _RAYS["big"]

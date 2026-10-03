@@ -45,6 +45,10 @@ class MenuScene(Scene):
         self.stars = [(random.randrange(W), random.randrange(420), random.random()) for _ in range(60)]
         # třpytky na logu (vlastní RNG – globální random stream zůstává jako dřív)
         self._vrng = random.Random(21)
+        # hustší hvězdné pole z vlastního RNG (globální random stream zůstává jako dřív)
+        sr = random.Random(5)
+        self.stars = self.stars + [(sr.randrange(W), int(sr.random() ** 1.4 * 330), sr.random() * 0.93)
+                                   for _ in range(90)]
         self.fx = ParticleSystem(80)
         self._twinkle = 0.6
 
@@ -148,13 +152,35 @@ class MenuScene(Scene):
             self.fx.emit(x, y, 0, 0, 0.45, STAR, (255, 250, 220), 3)
         self.fx.update(dt)
 
+    def _draw_stars(self, surf) -> None:
+        """Noční obloha: drobné tlumené tečky, jasné pixelové hvězdičky a pár větších třpytivých křížků,
+        které jemně pulzují (nikdy nezhasnou). Mřížka 3 px jako pixel art hry; nic přes kopce ani měsíc."""
+        t = self.t
+        for x, y, ph in self.stars:
+            if y > 330 or (x - 430) ** 2 + (y - 80) ** 2 < 56 ** 2 or (y < 48 and 150 < x < 390):
+                continue
+            gx, gy = x // 3 * 3, y // 3 * 3
+            if ph < 0.6:
+                surf.fill((132, 122, 170) if ph < 0.3 else (176, 168, 206), (gx, gy, 3, 3))
+            elif ph < 0.9:
+                col = ((236, 232, 255), (255, 240, 196), (200, 220, 255))[int(ph * 100) % 3]
+                surf.fill(col, (gx, gy, 3, 3))
+            else:
+                # třpytivý křížek: jasný střed, ramena se pomalu prodlužují a zkracují
+                arm = 2 if math.sin(t * 1.3 + ph * 60) > 0.2 else 1
+                core, ray = (255, 252, 236), (196, 186, 236)
+                for k in range(1, arm + 1):
+                    c = ray if k == arm else (232, 226, 255)
+                    surf.fill(c, (gx - 3 * k, gy, 3, 3))
+                    surf.fill(c, (gx + 3 * k, gy, 3, 3))
+                    surf.fill(c, (gx, gy - 3 * k, 3, 3))
+                    surf.fill(c, (gx, gy + 3 * k, 3, 3))
+                surf.fill(core, (gx, gy, 3, 3))
+
     def draw(self, surf) -> None:
         font = assets.font
         surf.blit(_menu_backdrop(), (0, 0))
-        for x, y, ph in self.stars:
-            # hvězdy svítí stále; jen asi čtvrtina pomalu mírně mění jas (dřív blikaly zhasnuto/rozsvíceno)
-            bright = ph < 0.25 and math.sin(self.t * 0.8 + ph * 40) > 0.3
-            surf.fill((255, 250, 220) if bright or ph > 0.6 else (200, 192, 214), (x, y, 2, 2))
+        self._draw_stars(surf)
         # měsíc se září
         blit_add(surf, [(glow_sprite(16, (90, 84, 60), 0.9 + 0.1 * math.sin(self.t * 1.5)), (430 - 49, 80 - 49))])
         surf.blit(_moon(), (430 - 36, 80 - 36))

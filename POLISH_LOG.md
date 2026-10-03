@@ -72,3 +72,7 @@
 - Coop: the ramp is removed from the sprite entirely, so it is gone in the game as well. Collision uses constants (`mapgen.py`), not the sprite, so this is visual only.
 - Chest: the persistent two-layer rays, pulsing glow, rising sparkles and bob were too much → back to the original single-layer rays, which now **shoot out once** on opening (reach grows in 0.3 s), shine briefly and fade by 1.4 s. The star burst on opening stays.
 - Results background: the parallax stripes and rays were not liked → replaced by a calm static pixel scene. Victory = dawn (dithered sky gradient into orange, half-risen sun behind a dark hill, slowly drifting pink pixel clouds). Defeat = night (steady stars, moon, dark clouds). The buttons sit on the dark hill (contrast), and the messages have a light translucent band so they stay readable over the sun. The unused `draw_bg` was removed.
+
+## Round 6 (user feedback)
+- Menu stars redone: three kinds on the 3 px grid. Dim tiny dots, bright pixel stars in three tones (white, warm, cold), and a few larger cross-shaped sparkle stars whose arms slowly grow and shrink. Denser field from a private RNG (the global `random` stream is unchanged), none over the hills, the moon or the currency row.
+- Chest rays no longer rotate: on opening they shoot out once in all directions (same look as before), shine briefly and fade.
