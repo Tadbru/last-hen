@@ -67,6 +67,7 @@ class Player:
         self.zone_mult = 1.0
         self.zone_push = (0.0, 0.0)
         self.on_ice = False
+        self.in_water = False       # louže nebo led (pasivka Kachny, B-60)
         self.golden_t = 20.0
         self.extra_dmg_mult = 1.0
         self.recompute(first=True)
@@ -114,7 +115,8 @@ class Player:
         moving = mag > 0.05
         special = self.char.special
         zone_mult = self.zone_mult
-        if special == "water" and (zone_mult < 1.0 or self.on_ice):
+        water = special == "water" and self.in_water
+        if water:
             zone_mult = 1.4
         speed = st.speed * zone_mult
         if moving:
@@ -138,7 +140,7 @@ class Player:
                 self.slide = max(0.0, self.slide - dt * 2.0)
         if special == "slide":
             accel = 520.0
-        elif special != "water" and self.on_ice:
+        elif self.on_ice and not water:
             accel = 260.0
         elif special != "water" and run.biome.slippery:
             accel = 900.0

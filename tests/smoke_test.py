@@ -480,8 +480,8 @@ def daily_and_weekly():
     cfg = build_config(a, "hen", "farm", "bossrush")
     gs = GameScene(a, cfg)
     a.set_scene(gs)
-    assert cfg.bonus_levels == 8
-    assert gs.run.level == 9, gs.run.level       # bonusové levelupy zvedají úroveň (dřív „Úroveň -6“)
+    assert cfg.bonus_levels == 10
+    assert gs.run.level == 11, gs.run.level       # bonusové levelupy zvedají úroveň (dřív „Úroveň -6“)
     for _ in range(1100):
         a.step(DT)
         if gs.run.state == "levelup":

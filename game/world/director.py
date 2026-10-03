@@ -12,6 +12,9 @@ from ..util import weighted_choice
 TAU = math.tau
 
 
+RUSH_SPAWN = 0.55          # hustota běžných nepřátel v boss rushi (zdroj XP mezi bossy)
+
+
 class Director:
     def __init__(self, run) -> None:
         self.run = run
@@ -22,7 +25,7 @@ class Director:
         if mode == "bossrush":
             self.bosses = []
             self.rush = list(BOSS_ORDER)
-            self.rush_t = 15.0        # čas na rozkoukání a výběr 8 bonusových karet
+            self.rush_t = 15.0        # čas na rozkoukání a výběr 10 bonusových karet
         else:
             self.bosses = list(WV.BOSSES_QUICK if self.quick else WV.BOSSES_FULL)
             self.rush = []
@@ -88,7 +91,7 @@ class Director:
         if run.cfg.mode == "bossrush":
             self._bossrush(dt)
             rate, max_alive, weights = WV.sample(min(em, 6.0))
-            rate *= 0.35
+            rate *= RUSH_SPAWN
         else:
             rate, max_alive, weights = WV.sample(em)
         rate *= self.spawn_mult

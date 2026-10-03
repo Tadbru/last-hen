@@ -92,7 +92,7 @@ DAILY_MODIFIERS = [
     dict(id="glass", name="Skleněné kuře", desc="Poloviční zdraví, dvojnásobné poškození."),
     dict(id="horde", name="Horda", desc="O 50 % víc nepřátel, o 25 % víc XP."),
     dict(id="giants", name="Obři", desc="Nepřátelé jsou větší a mají víc zdraví, ale dávají víc XP."),
-    dict(id="lucky", name="Šťastný den", desc="Všechny karty mají vyšší raritu."),
+    dict(id="lucky", name="Šťastný den", desc="Každá karta je o stupeň vzácnější."),
     dict(id="explosive", name="Ohňostroj", desc="Každá liška po smrti vybuchne."),
 ]
 DAILY_MOD_BY_ID = {m["id"]: m for m in DAILY_MODIFIERS}

@@ -13,6 +13,9 @@ from ..util import fmt_num
 from .base import Scene
 
 
+RUSH_DESC = "5 bossů za sebou. Start s 10 level-upy, bossové sypou XP, elity bedny."
+
+
 class DailyScene(Scene):
     def __init__(self, app) -> None:
         super().__init__(app)
@@ -90,12 +93,14 @@ class DailyScene(Scene):
         wk = progression.iso_week()
         claimed = self.save["weekly"].get("last_claim_week") == wk
         font.draw(surf, f"Týden {wk}", (br.x + 16, br.y + 52), (220, 200, 210), 2, "topleft")
-        font.draw(surf, "5 bossů za sebou,", (br.x + 16, br.y + 76), (220, 200, 210), 2, "topleft")
-        font.draw(surf, "start s 8 levelupy.", (br.x + 16, br.y + 100), (220, 200, 210), 2, "topleft")
-        font.draw(surf, "Odměna vybrána ✓" if claimed else "Odměna: 3 zl. + 2 žetony", (br.x + 16, br.y + 126),
+        yy = br.y + 74
+        for ln in font.wrap(RUSH_DESC, self.b_rush.rect.x - br.x - 28, 2)[:3]:
+            font.draw(surf, ln, (br.x + 16, yy), (220, 200, 210), 2, "topleft")
+            yy += 21
+        font.draw(surf, "Odměna vybrána ✓" if claimed else "Odměna: 3 zl. + 2 žetony", (br.x + 16, br.y + 140),
                   (140, 255, 160) if claimed else C_GOLD, 2, "topleft", outline=C_OUTLINE)
         best = self.save["weekly"].get("best", 0)
         if best:
-            font.draw(surf, f"Rekord: {fmt_num(best)}", (br.x + 16, br.y + 152), (220, 200, 210), 2, "topleft")
+            font.draw(surf, f"Rekord: {fmt_num(best)}", (br.x + 16, br.y + 164), (220, 200, 210), 2, "topleft")
         self.draw_buttons(surf)
         self.draw_overlays(surf)

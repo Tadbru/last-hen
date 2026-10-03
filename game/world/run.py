@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import dataclass, field
 
 from .. import assets
-from ..config import DT, MAX_PARTICLES, MAX_PICKUPS, MAX_PROJECTILES, MAX_TEXTS
+from ..config import DT, MAX_ENEMIES, MAX_PARTICLES, MAX_PICKUPS, MAX_PROJECTILES, MAX_TEXTS
 from ..core.camera import Camera
 from ..core.spatial import KMUL, OFF, SpatialGrid
 from ..data import waves as WV
@@ -18,7 +18,9 @@ from ..data.enemies import ENEMIES
 from ..data.meta import DIFFICULTIES
 from ..data.passives import MAX_PASSIVE_LEVEL
 from ..data.weapons import MAX_WEAPON_LEVEL, WEAPONS
+from ..gfx import pixelart as pa
 from ..gfx.particles import ParticleSystem
+from ..gfx.sprites import Anim
 from ..weapons.base import make_weapon
 from .bosses import make_boss_ctrl, tinted_anim
 from .director import Director
@@ -33,6 +35,16 @@ FLASH_GAP = 2.0            # min. rozestup běžných záblesků (s)
 PLAYER_FX_CAP = 0.3        # strop třesu od vlastních zbraní (offset ≈ 1 px)
 CROW_KILLS = 70
 
+
+# Ladění délky módů (4. kolo reportu)
+QUICK_XP = 1.6              # násobič XP v rychlém módu (dřív 1,8 → pauza každých ~6 s)
+QUICK_CARD_LUCK = 1.3       # …a místo toho vzácnější karty
+QUICK_FINAL_HP = 0.15       # HP finálního bosse v rychlém módu (dřív 0,1 → padl za 15 s)
+XP_STEEP_FROM = 30          # od této úrovně roste potřeba XP rychleji
+XP_STEEP = 0.12
+RUSH_BOSS_LEVELS = 4        # kolik úrovní XP vysype boss v boss rushi
+GIANT_K = 4 / 3             # zvětšení obrů
+PAUSE_GAP = 8.0             # min. herní čas mezi dvěma přerušeními (level-upy se mezitím spojí do jedné obrazovky)
 
 @dataclass
 class RunConfig:
@@ -87,8 +99,11 @@ class Run:
         self.mod_spawn_mult = 1.5 if "horde" in mods else 1.0
         self.mod_enemy_speed = 1.3 if "speedy" in mods else 1.0
         self.mod_enemy_hp = 1.5 if "giants" in mods else 1.0
-        self.xp_mult = (1.8 if cfg.mode in ("quick", "daily") else 1.0) * (1.25 if "horde" in mods else 1.0) \
+        quick = cfg.mode in ("quick", "daily")
+        # rychlý mód: méně level-upů (méně pauz), zato vzácnější karty (B-51)
+        self.xp_mult = (QUICK_XP if quick else 1.0) * (1.25 if "horde" in mods else 1.0) \
             * (1.3 if "giants" in mods else 1.0)
+        self.card_luck = QUICK_CARD_LUCK if quick else 1.0
         self.time = 0.0
         self.tick = 0
         self.state = "playing"
@@ -124,6 +139,7 @@ class Run:
         self.xp_next = self.xp_needed(self.level)
         self.pending_levelups = cfg.bonus_levels
         self.pending_chests: list[str] = []
+        self.pause_cd = 0.0             # odpočet do dalšího možného přerušení (B-51)
         self.offer = None
         self.chest_reward = None
         self.rerolls = cfg.rerolls
@@ -164,10 +180,12 @@ class Run:
         self.events_log: list[str] = []
         self.ever_passive = False
         self.max_weapons = 0
+        self.chest_coins = (0, 0)       # (počet beden, mince) převedené po výhře
         self.best_no_hit = 0.0
         self.intensity = 0.0
         self._qbuf: list = []
         self._boss_sprites: dict = {}
+        self._giant_sprites: dict = {}
 
         # startovní zbraň
         self.add_weapon(self.char.weapon)
@@ -209,6 +227,9 @@ class Run:
 
     def xp_needed(self, level: int) -> float:
         req = 5 + 4.5 * level + 0.14 * level * level
+        if level > XP_STEEP_FROM:
+            # strmější konec: build se nedokončí minuty před koncem plného módu (B-55)
+            req *= 1 + XP_STEEP * (level - XP_STEEP_FROM)
         return req * CHARACTERS[self.cfg.character].xp_req
 
     def enemy_dmg_mult(self) -> float:
@@ -279,13 +300,14 @@ class Run:
             hp *= 1 + em * 0.08
         speed = d.speed * self.rng.uniform(0.88, 1.12) * self.mod_enemy_speed
         dmg = d.dmg * WV.dmg_mult(em) * self.diff.dmg
-        spr = assets.sprites.enemies[d.sprite]
+        giant = "giants" in self.mods and not d.elite
+        spr = self.giant_sprite(d.sprite) if giant else assets.sprites.enemies[d.sprite]
         e = Enemy(d, x, y, hp, speed, dmg, spr)
         e.anim = self.rng.random() * 2
         e.cd = self.rng.uniform(1.0, 3.0)
         e.summoned = summoned
-        if "giants" in self.mods and not d.elite:
-            e.r *= 1.25
+        if giant:
+            e.r *= GIANT_K
         self.enemies.append(e)
         if not self.headless and self.camera.on_screen(x, y, -10):
             # objevení přímo na obrazovce (okraj arény, vyvolání) – vylézt z hlíny, ne se „zhmotnit“
@@ -314,6 +336,15 @@ class Run:
             self._boss_sprites[key] = a
         return a
 
+    def giant_sprite(self, name: str) -> Anim:
+        """Zvětšený sprite pro modifikátor Obři (B-58): 4/3 = 1 art pixel ze 3 na 4 px, čisté hrany."""
+        a = self._giant_sprites.get(name)
+        if a is None:
+            base = assets.sprites.enemies[name]
+            a = Anim([pa.scale(f, GIANT_K) for f in base.frames[0]])
+            self._giant_sprites[name] = a
+        return a
+
     def spawn_boss(self, bid: str) -> None:
         b = BOSSES[bid]
         p = self.player
@@ -322,13 +353,21 @@ class Run:
         hp = b.hp * self.diff.hp * self.biome.hp_mult
         bdmg = b.dmg * self.diff.dmg * (1 + 0.05 * self.director.eff_min())
         if final and quick:
-            hp *= 0.1
+            hp *= QUICK_FINAL_HP
             bdmg *= 0.8
         if self.cfg.mode == "bossrush":
             hp *= 0.75
         if final:
             # aréna kolem hráče
             self.arena = (p.x, p.y, ARENA_R)
+            # bedny, zrní a odměny za plotem se stáhnou dovnitř arény (B-50)
+            lim = ARENA_R - 70
+            for pk in self.pickups:
+                dx, dy = pk.x - p.x, pk.y - p.y
+                d = math.hypot(dx, dy)
+                if d > lim:
+                    pk.x = p.x + dx / d * lim
+                    pk.y = p.y + dy / d * lim
             for e in self.enemies:
                 dx, dy = e.x - p.x, e.y - p.y
                 d2 = dx * dx + dy * dy
@@ -415,6 +454,8 @@ class Run:
         else:
             self.pickups.append(Pickup(e.x, e.y, P_CHEST, 2))
             self.banner("Boss poražen!", (255, 214, 70), 2.0)
+            if self.cfg.mode == "bossrush":
+                self._boss_xp(e.x, e.y)
             self.sfx("fanfare")
 
     def recycle_enemy(self, e) -> None:
@@ -427,7 +468,7 @@ class Run:
         raised = 0
         keep = deque(maxlen=40)
         for (x, y) in self.corpses:
-            if raised < 5 and (x - owl.x) ** 2 + (y - owl.y) ** 2 < 300 * 300 and len(self.enemies) < 400:
+            if raised < 5 and (x - owl.x) ** 2 + (y - owl.y) ** 2 < 300 * 300 and len(self.enemies) < MAX_ENEMIES:
                 self.spawn_enemy("skeleton_fox", x, y, summoned=True)
                 self.particles.puff(x, y, 4, (170, 100, 220))
                 self.add_ring(x, y, 4, 30, 0.4, (170, 90, 220), 3)
@@ -715,14 +756,42 @@ class Run:
     # =====================================================================================
     def drop_xp(self, x: float, y: float, value: float) -> None:
         if len(self.pickups) >= MAX_PICKUPS:
-            # sloučit do náhodného existujícího zrna
-            for _ in range(4):
-                pk = self.pickups[self.rng.randrange(len(self.pickups))]
-                if pk.kind == P_XP:
-                    pk.value += value
-                    return
-            return
+            # strop pickupů (B-49): XP nesmí zmizet do vzdáleného zrna mimo obrazovku
+            near, nd = None, 160.0 * 160.0
+            far, fd = None, -1.0
+            px, py = self.player.x, self.player.y
+            for pk in self.pickups:
+                if pk.kind != P_XP or pk.attract:
+                    continue
+                d2 = (pk.x - x) ** 2 + (pk.y - y) ** 2
+                if d2 < nd:
+                    near, nd = pk, d2
+                pd = (pk.x - px) ** 2 + (pk.y - py) ** 2
+                if pd > fd:
+                    far, fd = pk, pd
+            if near is not None:
+                near.value += value              # sloučit do zrna přímo u místa zabití
+                return
+            if far is not None:
+                # nejvzdálenější staré zrno se „přestěhuje“ sem i se svou hodnotou – nic se neztratí
+                far.alive = False
+                self.pickups.remove(far)
+                value += far.value
+            else:
+                return
         self.pickups.append(Pickup(x + self.rng.uniform(-4, 4), y + self.rng.uniform(-4, 4), P_XP, value))
+
+    def _boss_xp(self, x: float, y: float) -> None:
+        """Boss rush: poražený boss vysype zlatá vejce zhruba na RUSH_BOSS_LEVELS úrovní (B-53)."""
+        need = sum(self.xp_needed(self.level + i) for i in range(RUSH_BOSS_LEVELS)) - self.xp
+        need /= max(0.1, self.player.stats.growth)
+        n = 6
+        for i in range(n):
+            a = i * math.tau / n + self.rng.uniform(-0.3, 0.3)
+            pk = Pickup(x + math.cos(a) * 40, y + math.sin(a) * 40, P_GOLDEGG, need / n)
+            pk.vz = 160
+            pk.z = 1
+            self.pickups.append(pk)
 
     def lay_golden_egg(self, x: float, y: float) -> None:
         pk = Pickup(x, y, P_GOLDEGG, max(10.0, self.xp_next * 0.35))
@@ -844,10 +913,10 @@ class Run:
                 self.state = "dead"
             return
         if self.state == "victory_anim":
-            self.state_t -= dt
-            self.time += dt
+            self.state_t -= dt          # čas runu stojí – výsledný čas = okamžik porážky bosse (B-66)
             self._victory_tick(dt)
             if self.state_t <= 0:
+                self._settle_chests()
                 self.state = "victory"
             return
 
@@ -934,8 +1003,10 @@ class Run:
         # intenzita hudby
         self.intensity = min(1.0, len(self.enemies) / 260.0 + (0.5 if self.bosses else 0.0))
 
-        # úrovně, bedny
-        if self.state == "playing" and not p.dead:
+        # úrovně, bedny – nejvýš jedno přerušení za PAUSE_GAP s; čekající level-upy se pak ukážou za sebou (B-51)
+        if self.pause_cd > 0:
+            self.pause_cd -= dt
+        if self.state == "playing" and not p.dead and self.pause_cd <= 0:
             if self.pending_levelups > 0:
                 self._open_levelup()
             elif self.pending_chests:
@@ -973,6 +1044,8 @@ class Run:
             self._open_levelup()
         elif self.pending_chests:
             self._open_chest()
+        if self.state == "playing":
+            self.pause_cd = PAUSE_GAP
 
     def on_player_death(self) -> None:
         if self.victory:
@@ -1000,6 +1073,20 @@ class Run:
         self.crow(free=True)
         self.sfx("revive")
         self.banner("Oživena!" if self.char.female else "Oživen!", (120, 255, 120), 1.6)
+
+    def _settle_chests(self) -> None:
+        """Bedny sebrané během vítězné animace (nebo ležící na zemi) se po výhře převedou na mince (B-50)."""
+        n = len(self.pending_chests)
+        coins = sum(40 if k == "boss" else 25 for k in self.pending_chests)
+        for pk in self.pickups:
+            if pk.alive and pk.kind == P_CHEST:
+                n += 1
+                coins += 40 if pk.value >= 2 else 25
+                pk.alive = False
+        self.pending_chests = []
+        if n:
+            self.coins += coins
+            self.chest_coins = (n, coins)
 
     def _victory_tick(self, dt: float) -> None:
         # nepřátelé se rozpadají ve slunečním světle

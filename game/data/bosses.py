@@ -55,13 +55,13 @@ BOSS_ORDER = ["spy_fox", "rabbit", "zombie_bear", "wolf_alpha", "zombie_rooster"
 # Varianta finálního bosse podle biomu: jméno, tónování, co padá z nebe ve fázi 2
 FINAL_VARIANTS = {
     "farm": dict(name="ZOMBIE KOHOUT", tint=None, rain="zchick",
-                 quote="Na tomhle dvoře může kokrhat jen JEDEN!"),
+                 quote="Na tomhle dvoře může kokrhat jen JEDEN!", rain_line="Prší slepice! Haleluja!"),
     "forest": dict(name="KOHOUT MLHOŠ", tint=(150, 190, 255), rain="bat",
-                   quote="Z mlhy jsem přišel, v mlze tě sním!"),
+                   quote="Z mlhy jsem přišel, v mlze tě sním!", rain_line="Prší netopýři! Mlha je moje!"),
     "city": dict(name="KOHOUT KMOTR", tint=(255, 200, 120), rain="rat",
-                 quote="Udělám ti nabídku, kterou nemůžeš odkvokat."),
+                 quote="Udělám ti nabídku, kterou nemůžeš odkvokat.", rain_line="Prší krysy! Rodina drží spolu!"),
     "mountain": dict(name="KOHOUT YETTI", tint=(220, 240, 255), rain="snow_fox",
-                     quote="Na horách je zima. Pro tebe věčná!"),
+                     quote="Na horách je zima. Pro tebe věčná!", rain_line="Lavina lišek! Ze svahu na tebe!"),
     "factory": dict(name="ROBOKOHOUT 3000", tint=(190, 200, 230), rain="robo_fox",
-                    quote="ZAHAJUJI PROTOKOL: KUŘECÍ ŘÍZEK."),
+                    quote="ZAHAJUJI PROTOKOL: KUŘECÍ ŘÍZEK.", rain_line="VYPOUŠTÍM ROBOLIŠKY. ODPOR JE MARNÝ."),
 }

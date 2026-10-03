@@ -285,7 +285,7 @@ class WorldMap:
                     yield from ch.zones
 
     def apply_zones(self, player) -> None:
-        slow, ice, px, py = 1.0, False, 0.0, 0.0
+        slow, ice, water, px, py = 1.0, False, False, 0.0, 0.0
         for z in self.zones_near(player.x, player.y):
             if z.contains(player.x, player.y):
                 if z.kind == "conveyor":
@@ -294,8 +294,10 @@ class WorldMap:
                 else:
                     slow = min(slow, z.slow)
                     ice = ice or z.ice
+                    water = water or z.kind in ("puddle", "ice")
         player.zone_mult = slow
         player.on_ice = ice
+        player.in_water = water
         player.zone_push = (px, py)
 
     # --- sudy ---------------------------------------------------------------------------------

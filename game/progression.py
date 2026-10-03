@@ -71,13 +71,29 @@ def has_choices(run) -> bool:
 
 
 def roll_rarity(run) -> int:
-    luck = run.player.stats.luck * (2.0 if "lucky" in run.mods else 1.0)
+    luck = run.player.stats.luck * getattr(run, "card_luck", 1.0)
     r = run.rng.random()
     if r < 0.045 * luck * luck:
-        return 2
-    if r < 0.045 * luck * luck + 0.20 * luck:
-        return 1
-    return 0
+        rar = 2
+    elif r < 0.045 * luck * luck + 0.20 * luck:
+        rar = 1
+    else:
+        rar = 0
+    if "lucky" in run.mods:
+        rar = min(2, rar + 1)       # Šťastný den: každá karta o stupeň vzácnější (B-59)
+    return rar
+
+
+def _take_weighted(rng, pool: list):
+    """Vytáhne (a odebere) jednoho kandidáta z poolu podle váhy."""
+    total = sum(c[2] for c in pool)
+    r = rng.random() * total
+    acc = 0.0
+    for i, c in enumerate(pool):
+        acc += c[2]
+        if r <= acc:
+            return pool.pop(i)
+    return pool.pop()
 
 
 def _card(run, kind: str, cid: str, rarity: int) -> Card:
@@ -118,16 +134,7 @@ def make_offer(run, count: int = 3) -> list[Card]:
     cards: list[Card] = []
     pool = list(cands)
     while pool and len(cards) < count:
-        total = sum(c[2] for c in pool)
-        r = rng.random() * total
-        acc = 0.0
-        for i, c in enumerate(pool):
-            acc += c[2]
-            if r <= acc:
-                pick = pool.pop(i)
-                break
-        else:
-            pick = pool.pop()
+        pick = _take_weighted(rng, pool)
         cards.append(_card(run, pick[0], pick[1], roll_rarity(run)))
     fi = 0
     while len(cards) < count and fi < len(FILLERS):
@@ -169,7 +176,24 @@ def banish(run, card: Card) -> bool:
         return False
     run.banishes -= 1
     run.banished.add(card.id)
-    run.offer = make_offer(run)
+    offer = list(run.offer or [])
+    idx = next((i for i, c in enumerate(offer) if c is card), -1)
+    taken = {(c.kind, c.id) for c in offer}
+    pool = [c for c in _candidates(run) if (c[0], c[1]) not in taken]
+    new = None
+    if pool:
+        pick = _take_weighted(run.rng, pool)
+        new = _card(run, pick[0], pick[1], roll_rarity(run))
+    elif not any(c.kind == "heal" for c in offer):
+        k, t, d, ic = FILLERS[0]
+        new = Card(k, k, 0, 0, False, 0, 0, t, d, ic)
+    # nahradí se jen vyřazená karta, ostatní zůstanou (dřív to byl rerol zdarma)
+    if idx >= 0:
+        if new is not None:
+            offer[idx] = new
+        else:
+            offer.pop(idx)
+    run.offer = offer
     return True
 
 
@@ -296,7 +320,7 @@ def apply_results(save, run, rewards: dict) -> list[str]:
     if "zombie_rooster" in run.bosses_killed and "rooster" not in d["unlocked_chars"]:
         d["unlocked_chars"].append("rooster")
         msgs.append("Odemčeno: Kohout Elvis!")
-    if run.victory:
+    if run.victory and run.cfg.mode != "bossrush":     # boss rush je vždy Farma/Normal – nic neodemyká (B-57)
         from .data.biomes import BIOME_ORDER
         i = BIOME_ORDER.index(run.biome.id)
         if i + 1 < len(BIOME_ORDER) and BIOME_ORDER[i + 1] not in d["unlocked_maps"] and run.cfg.mode != "daily":

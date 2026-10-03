@@ -12,6 +12,17 @@ from ..util import ease_out_back, fmt_num, fmt_time
 from .base import Dialog, Scene, draw_bg
 
 
+# Podtitul výhry podle mapy (B-64)
+VICTORY_SUB = {
+    "farm": "Slunce vyšlo. Farma je zachráněna!",
+    "forest": "Slunce vyšlo. Les je zase v klidu!",
+    "city": "Slunce vyšlo. Město je zachráněno!",
+    "mountain": "Slunce vyšlo. Hory jsou zase klidné!",
+    "factory": "Slunce vyšlo. Továrna je zavřená!",
+    "bossrush": "Všech 5 bossů poraženo!",
+}
+
+
 class ResultsScene(Scene):
     music = "menu"
 
@@ -19,8 +30,12 @@ class ResultsScene(Scene):
         super().__init__(app)
         self.run = run
         self.victory = run.victory
+        run._settle_chests()            # nevyzvednuté/neotevřené bedny → mince (B-50)
         self.rewards = progression.compute_rewards(run)
         self.msgs = progression.apply_results(app.save, run, self.rewards)
+        if run.chest_coins[0]:
+            n, c = run.chest_coins
+            self.msgs.insert(0, f"Neotevřené bedny ({n}): +{c} mincí")
         self.doubled = False
         self._page = 0
         self._page_t = 0.0
@@ -134,7 +149,8 @@ class ResultsScene(Scene):
         k = ease_out_back(min(1.0, self.t * 2.5))
         if self.victory:
             title, col = "VÍTĚZSTVÍ!", (255, 220, 90)
-            sub = "Slunce vyšlo. Farma je zachráněna!"
+            sub = VICTORY_SUB.get("bossrush" if run.cfg.mode == "bossrush" else run.biome.id,
+                                  "Slunce vyšlo. Lišky jsou poražené!")
         else:
             title, col = ("PADLA!" if run.char.female else "PADL!"), (255, 110, 100)
             sub = "Lišky tentokrát vyhrály. Příště!"

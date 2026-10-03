@@ -22,7 +22,13 @@ def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
     # XP bar
     ratio = run.xp / run.xp_next if run.xp_next else 0
     draw_bar(surf, (4, 4, W - 8, 12), ratio, (80, 200, 255), back=(20, 30, 50))
-    font.draw(surf, f"Úr. {run.level}", (8, 22), C_TEXT, 2, "topleft", outline=C_OUTLINE)
+    lv = f"Úr. {run.level}"
+    font.draw(surf, lv, (8, 22), C_TEXT, 2, "topleft", outline=C_OUTLINE)
+    if run.pending_levelups > 0 and run.state == "playing":
+        # level-up čeká na další pauzu – ukázat, že karta nepropadla
+        a = int(170 + 85 * math.sin(t * 8))
+        font.draw(surf, f"+{run.pending_levelups}", (16 + font.width(lv, 2), 22), C_GOLD, 2, "topleft",
+                  outline=C_OUTLINE, alpha=a)
     # časovač
     if run.final_boss is not None:
         font.draw(surf, "BOSS!", (W // 2, 22), (255, 90, 80), 4, "midtop", outline=C_OUTLINE)

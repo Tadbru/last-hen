@@ -91,7 +91,7 @@ tests/smoke_test.py        headless smoke testy všech systémů
 - **Mince** v runu (skip, bedny, Zlatá bomba) se na konci převedou na vejce 1:1.
 - **Zlatá vejce**: bossové, výzvy, denní série, 100% sbírky. **Žetony**: denní výzva + denní login → truhly v Obchodě.
 - **Denní výzva**: seed = datum, jedna šance denně, pevná kombinace zvíře/mapa/modifikátor; lokální žebříček top 10 = vlastní výsledky + deterministicky generovaní „sousedé“ z vesnice (offline hra nemá server).
-- **Týdenní boss rush**: všichni bossové za sebou, start s 8 levelupy zdarma, odměna jednou za ISO týden.
+- **Týdenní boss rush**: všichni bossové za sebou, start s 10 level-upy zdarma (bossové sypou XP), odměna jednou za ISO týden.
 - **Sezónní témata**: automaticky podle data (říjen = Halloween, prosinec = Vánoce, březen–duben = Velikonoce), přepínatelné v Nastavení.
 - **Reklamy** jsou jen mock (falešný dialog s odpočtem), žádné SDK.
 - **Zvuk**: numpy, 22 050 Hz mono; bez numpy nebo bez audio zařízení hra běží potichu.
@@ -120,8 +120,9 @@ Všech 7 bodů „Definice hotovo“ je splněno:
 ### Balanc (bot `tools/simulate.py`, Farma)
 - Plný mód, čerstvá postava bez Hnízda: ~50 % výher (4/8 v poslední dávce, všech 7 zvířat dohraje do konce);
   s Hnízdem na úr. 2 výrazně víc (6/7). Finální boss trvá 50–180 s, minimum HP vítězných botů 5–75 %.
-- Rychlý mód, čerstvá postava: ~43 % výher (6/14). Rozhoduje souboj se Zombie Kohoutem – při jeho příletu
-  se slepici doplní zdraví i kokrhání.
+- Rychlý mód, čerstvá postava (po 4. kole): 40/56 výher, každé zvíře 5–7 z 8. Rozhoduje souboj se Zombie
+  Kohoutem (22–150 s) – při jeho příletu se slepici doplní zdraví i kokrhání.
+- Boss rush (10 bonusových level-upů): 13/21 výher, každé zvíře aspoň jednou; Špión 19–63 s.
 - Těžší biomy (Les → Továrna) jsou výrazně náročnější a počítají s hráčem, který už má meta-vylepšení.
 - Nejsilnější zdroje poškození (měřeno `dmg_log`): kontakt s nepřáteli, rázové vlny bosse, projektily.
   Exploze lišek a plot arény byly zmírněny (delší rozbuška, odraz od plotu).
@@ -205,3 +206,28 @@ Všech 7 bodů „Definice hotovo“ je splněno:
 - Jednotné nadpisy, šipky vpřed/zpět, centrovaný řádek měn, okraj 16 px (B-44); dialogy podle obsahu, Enter/Esc/
   Zpět nikdy nespustí nevratnou akci (B-45); pauza bez prosvítajícího HUD (B-46); toasty podle scény (B-47);
   verze v menu odpovídá buildu (B-48).
+
+### Čtvrtá vlna – balanc módů a dotažení (B-49 – B-66)
+- B-49: strop pickupů nesmaže XP – nové zrno se sloučí se zrnem u místa zabití, jinak se nejvzdálenější staré
+  zrno „přestěhuje“ k hráči i se svou hodnotou. B-50: aréna stáhne bedny a zrní dovnitř plotu, bedny sebrané po
+  porážce bosse se ve výsledcích převedou na mince. B-66: čas a skóre se zastaví v okamžiku porážky bosse.
+- B-51: nejvýš jedno přerušení za 8 s herního času (`PAUSE_GAP`); level-upy, které mezitím přijdou, se ukážou
+  za sebou v jedné pauze a v HUD svítí „+N“ u úrovně. Rychlý mód má XP ×1,6 (dřív 1,8) a vzácnější karty
+  (štěstí ×1,3). Výsledek: 6–7 pauz za minutu místo 8–11 (snížení samotného XP skoro nepomáhá, úroveň roste
+  zhruba s odmocninou nasbíraného XP).
+- B-52: Kachna 85 % HP a +10 % rychlost, Páv potřebuje jen +10 % XP, Ocas-vějíř zesílen (L8 na jeden cíl
+  52 → 154 DPS, vějíř zůstává 140°, plný kruh až v evoluci).
+- B-53: boss rush – 10 bonusových level-upů, hustota běžných lišek ×0,55 (dřív 0,35), každý poražený boss
+  vysype zlatá vejce zhruba na 4 úrovně. Popis módu zmiňuje XP z bossů a bedny z elit.
+- B-54: finální boss rychlého módu má 15 % HP plné verze (dřív 10 %), souboj trvá 22–150 s a fáze jsou vidět.
+- B-55: od úrovně 30 roste potřeba XP o 12 % za úroveň navíc; build se v plném módu dokončí zhruba v 9:00–10:20
+  a automatických léčení je 1–6 místo 16–24. Výplňové level-upy dál jen léčí.
+- B-56: banner a bonus „na rozjezd“ jen v rychlém a plném módu. B-57: výhra v boss rushi nic neodemyká.
+- B-58: Obři jsou opravdu větší (sprite ×4/3 – art pixel ze 3 na 4 px, kolize odpovídá). B-59: Šťastný den
+  zvedne raritu každé karty o stupeň (žádné běžné karty). B-60: pasivka Kachny platí jen v louži a na ledu;
+  v závěji a na oleji je Kachna pomalejší jako ostatní.
+- B-61: Špión se teleportuje jen na volné místo uvnitř arény, Špión a Králík se o překážky zastaví; medvěd,
+  Alfa a Kohout je dál drtí (záměr – velcí bossové se nezaseknou). B-62: zpomalení a zmražení bosse odtikává
+  i když boss stojí. B-63: sova, Alfa i déšť ve fázi 2 respektují `MAX_ENEMIES` (telefon 320).
+- B-64: dialog oživení a nápověda podle zvířete a rodu („Krocan Rambo padl…“, „střílí sám“), podtitul výhry
+  podle mapy, každá varianta finálního bosse má vlastní hlášku fáze 2. B-65: Vyřadit vymění jen vyřazenou kartu.

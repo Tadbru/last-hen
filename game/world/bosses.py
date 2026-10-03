@@ -4,6 +4,7 @@ from __future__ import annotations
 import math
 
 from .. import assets
+from ..config import MAX_ENEMIES
 from ..data.bosses import BOSSES, FINAL_VARIANTS
 from ..gfx import pixelart as pa
 from ..gfx.sprites import Anim
@@ -13,6 +14,7 @@ TAU = math.tau
 
 
 class BossCtrl:
+    solid = False               # vytlačovat z překážek?
     def __init__(self, run, e, bdef) -> None:
         self.run = run
         self.e = e
@@ -26,6 +28,7 @@ class BossCtrl:
         self.quote_t = 6.0
         self.fight_t = 0.0
         self.enraged = False
+        self.quotes = bdef.lines
         run.say(e, bdef.intro, 3.0)
 
     # --- pomocníci ----------------------------------------------------------------------
@@ -42,15 +45,16 @@ class BossCtrl:
     def move(self, vx: float, vy: float, dt: float) -> None:
         e = self.e
         if e.freeze_t > 0:
-            e.freeze_t -= dt
             vx *= 0.3
             vy *= 0.3
         if e.slow_t > 0:
-            e.slow_t -= dt
             vx *= 1 - e.slow_f * 0.5
             vy *= 1 - e.slow_f * 0.5
         e.x += vx * dt
         e.y += vy * dt
+        if self.solid:
+            # menší bossové se o kulisy zastaví jako lišky (B-61); velcí je drtí schválně
+            self.run.map.collide_circle(e, e.r * 0.8)
         if vx > 3:
             e.face = 0
         elif vx < -3:
@@ -73,9 +77,9 @@ class BossCtrl:
 
     def maybe_quote(self, dt: float) -> None:
         self.quote_t -= dt
-        if self.quote_t <= 0 and self.b.lines:
+        if self.quote_t <= 0 and self.quotes:
             self.quote_t = self.run.rng.uniform(9, 15)
-            self.run.say(self.e, self.run.rng.choice(self.b.lines), 2.4)
+            self.run.say(self.e, self.run.rng.choice(self.quotes), 2.4)
 
     def modify_damage(self, dmg: float) -> float:
         if self.invuln > 0 or self.state == "intro":
@@ -83,6 +87,11 @@ class BossCtrl:
         return dmg
 
     def update(self, dt: float) -> None:
+        e = self.e
+        if e.freeze_t > 0:
+            e.freeze_t -= dt            # časovače zpomalení běží i když boss stojí (B-62)
+        if e.slow_t > 0:
+            e.slow_t -= dt
         self.fight_t += dt
         self.invuln = max(0.0, self.invuln - dt)
         if self.state == "intro":
@@ -105,6 +114,24 @@ class BossCtrl:
 
 # ---------------------------------------------------------------------------------------
 class SpyFox(BossCtrl):
+    solid = True
+
+    def _blink_target(self) -> tuple[float, float]:
+        """Místo za hráčem, které není v překážce ani za plotem arény (B-61)."""
+        run, p = self.run, self.p
+        base = math.atan2(-p.dir_y, -p.dir_x)
+        for da in (0.0, 0.6, -0.6, 1.2, -1.2, 1.9, -1.9, math.pi):
+            a = base + da
+            bx, by = p.x + math.cos(a) * 95, p.y + math.sin(a) * 95
+            if run.map.blocked(bx, by, self.e.r * 0.8):
+                continue
+            if run.arena is not None:
+                ax, ay, ar = run.arena
+                if (bx - ax) ** 2 + (by - ay) ** 2 > (ar - self.e.r) ** 2:
+                    continue
+            return bx, by
+        return self.e.x, self.e.y
+
     def tick(self, dt: float) -> None:
         run, e = self.run, self.e
         nx, ny, d = self.to_player()
@@ -123,9 +150,7 @@ class SpyFox(BossCtrl):
             e.alpha = 60
             self.invuln = 0.1
             if self.st <= 0:
-                p = self.p
-                bx = p.x - p.dir_x * 95
-                by = p.y - p.dir_y * 95
+                bx, by = self._blink_target()
                 self.target = (bx, by)
                 self.state = "warn"
                 self.st = 0.65
@@ -166,6 +191,8 @@ class SpyFox(BossCtrl):
 
 
 class Rabbit(BossCtrl):
+    solid = True
+
     def __init__(self, *a) -> None:
         super().__init__(*a)
         self.hop = 0.0
@@ -282,6 +309,8 @@ class WolfAlpha(BossCtrl):
                 p = self.p
                 n = 6 if e.hp > e.max_hp * 0.5 else 9
                 for i in range(n):
+                    if len(run.enemies) >= MAX_ENEMIES:
+                        break
                     a = i * TAU / n
                     # smečka přibíhá zpoza okraje obrazovky (elipsa kolem viditelné plochy)
                     run.spawn_enemy("wolf", p.x + math.cos(a) * 330, p.y + math.sin(a) * 540, summoned=True)
@@ -326,6 +355,9 @@ class ZombieRooster(BossCtrl):
         self.small = e.spr
         self.big = run.boss_sprite("zombie_rooster_big", variant.get("tint"))
         self.base_r = e.r
+        rl = variant.get("rain_line")
+        if rl and len(bdef.lines) > 1:
+            self.quotes = (bdef.lines[0], rl) + tuple(bdef.lines[2:])
         run.say(e, variant["quote"], 3.0)
 
     def modify_damage(self, dmg: float) -> float:
@@ -380,7 +412,7 @@ class ZombieRooster(BossCtrl):
         run.shake(0.5)
         run.camera.vibrate(14)
         run.camera.haptic(70)
-        line = self.b.lines[1] if ph == 2 else self.b.lines[2]
+        line = self.quotes[1] if ph == 2 else self.quotes[2]
         run.say(e, line, 2.5)
         run.banner(f"FÁZE {ph}", (255, 120, 60), 1.5)
         if ph == 3:
@@ -455,7 +487,7 @@ class ZombieRooster(BossCtrl):
                     if (pp.x - tel.x) ** 2 + (pp.y - tel.y) ** 2 < (tel.r + pp.r) ** 2:
                         pp.take_damage(e.dmg * 0.6, tel.x, tel.y, "déšť")
                     run.particles.puff(tel.x, tel.y, 5, (200, 220, 190), 80)
-                    if len(run.enemies) < 380:
+                    if len(run.enemies) < MAX_ENEMIES:
                         run.spawn_enemy(rain, tel.x, tel.y, summoned=True)
                 run.telegraphs.append(Telegraph("drop", x, y, 24, 0.9, fall, color=(170, 255, 120), data=rain))
         self.cd -= dt

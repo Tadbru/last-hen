@@ -25,7 +25,7 @@ def build_config(app, character: str, biome: str, mode: str, difficulty: str = "
     if save["rubber_band"] and mode in ("quick", "full"):
         bonus = 1
     if mode == "bossrush":
-        bonus = 8
+        bonus = 10
     season = progression.season_for(None, save.settings.get("season", "auto"))
     skin = save["skin"].get(character)
     if not progression.skin_usable(save, skin):
@@ -64,7 +64,7 @@ class GameScene(Scene):
         self.death_prompted = False
         self.finished = False
         self.hint_t = 0.0 if app.save["seen_intro"] else 7.0
-        if app.save["rubber_band"] and cfg.bonus_levels:
+        if app.save["rubber_band"] and cfg.mode in ("quick", "full") and cfg.bonus_levels:
             app.save["rubber_band"] = False
             self.run.banner("Bonus na rozjezd: +1 úroveň!", (120, 255, 140), 2.5)
 
@@ -183,7 +183,9 @@ class GameScene(Scene):
             self.death_prompted = True
             self.joy.release()
             if not run.revived and self.cfg.mode != "daily":
-                self.modal = Dialog("Konec?", "Slepice padla… Podívej se na reklamu a vstaň z popela!",
+                ch = run.char
+                fell = f"{ch.name} {'padla' if ch.female else 'padl'}…"
+                self.modal = Dialog("Konec?", f"{fell} Podívej se na reklamu a vstaň z popela!",
                                     [("Oživ se (reklama)", self._ad_revive, "green"), ("Vzdát to", self._finish, "danger")],
                                     icon="heart")
             else:
@@ -235,12 +237,13 @@ class GameScene(Scene):
 
     def _hint(self, surf) -> None:
         font = assets.font
+        ch = self.run.char
         a = int(255 * min(1.0, self.hint_t / 0.6))
         box = pygame.Surface((W - 40, 150), pygame.SRCALPHA)
         box.fill((20, 12, 24, int(a * 0.8)))
         surf.blit(box, (20, H - 330))
         lines = ["Drž a táhni prstem/myší ve spodní části", "obrazovky (nebo WASD / šipky).",
-                 "Slepice střílí sama!", "Mezerník / velké tlačítko = KOKRHÁNÍ"]
+                 f"{ch.name} střílí {'sama' if ch.female else 'sám'}!", "Mezerník / velké tlačítko = KOKRHÁNÍ"]
         for i, ln in enumerate(lines):
             col = (255, 230, 120) if i >= 2 else (240, 235, 245)
             font.draw(surf, ln, (W // 2, H - 318 + i * 32), col, 2, "midtop", alpha=a)
