@@ -11,7 +11,7 @@ from ..data.passives import PASSIVES
 from ..data.weapons import WEAPONS
 from ..gfx import pixelart as pa
 from ..ui.widgets import Button, ScrollArea, draw_icon_frame, draw_panel, draw_title_bar, MARGIN
-from .base import Scene
+from .base import Scene, draw_scene_bg
 
 TABS = [("enemies", "Lišky"), ("bosses", "Bossové"), ("weapons", "Zbraně"), ("evolutions", "Evoluce"),
         ("passives", "Pasivky")]
@@ -92,7 +92,7 @@ class CollectionScene(Scene):
 
     def draw(self, surf) -> None:
         font = assets.font
-        surf.fill((30, 30, 44))
+        draw_scene_bg(surf, self.t, (30, 30, 44))
         draw_title_bar(surf, "SBÍRKA")
         have, total = progression.collection_progress(self.save)
         font.draw(surf, f"Objeveno {have}/{total} ({int(100 * have / max(1, total))} %)", (W // 2, 74),

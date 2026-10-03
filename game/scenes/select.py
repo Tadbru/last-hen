@@ -17,7 +17,7 @@ from ..ui.widgets import MARGIN as M
 from ..ui.widgets import (SELECT_COLOR, Button, currency_row, draw_frame, draw_icon_frame, draw_panel,
                           draw_title_bar)
 from ..util import fmt_num
-from .base import Dialog, Scene
+from .base import Dialog, Scene, draw_scene_bg
 
 
 class SelectScene(Scene):
@@ -164,7 +164,7 @@ class SelectScene(Scene):
     # --- kreslení --------------------------------------------------------------------------------
     def draw(self, surf) -> None:
         font = assets.font
-        surf.fill((36, 26, 44))
+        draw_scene_bg(surf, self.t, (36, 26, 44))
         c = self.char
         un = self.unlocked(c.id)
         draw_title_bar(surf, "Vyber zvíře")

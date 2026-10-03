@@ -27,3 +27,13 @@
 - Ambient per biome: farm fireflies (fade toward dawn), forest leaves + fireflies, city dust motes, mountain snow, factory embers + motes. World-anchored with slight parallax.
 - Player footstep dust every 0.16 s while walking, coloured per biome.
 - Permanent edge vignette drawn only as 4 edge strips (about ⅓ of the screen's pixels), because classic pygame on Android is slow at full-screen alpha blits.
+- Pass B: panels, buttons, bars and icon frames have notched pixel corners (3 px), a light top/left edge and a dark bottom. One change in `widgets.py` restyles every screen consistently.
+- Primary (orange) buttons get a diagonal shine sweep once every 4 s: idle motion without being distracting. Only primary buttons get it, so the hierarchy stays clear.
+- `draw_bar(ghost=...)` + `Ghost` state: the boss HP bar and the HP bar under the player leave a light trail that holds 0.35 s and then drains.
+- Shared menu background `draw_scene_bg`: a slowly drifting pattern of tiny pixel eggs (thematic, very low contrast) + pixel-step vignette. It keeps each screen's original base colour, is pre-rendered once and costs one blit per frame.
+- Full-screen dim layers (Dialog, overlays) are now cached surfaces instead of being allocated every frame.
+- Menu: the static backdrop is pre-rendered once (sky in 6 px bands, pixel hill, barn, grass from the real Farm tile darkened to night). Also added a pixel moon with a soft halo, 12 fireflies, and occasional star twinkles on the logo.
+- Results: stats count up one after another (0.25 s + 0.12 s stagger), the egg total counts up after them, plus confetti on victory and slowly falling feathers on defeat.
+- Settings: added an "O hře" (About) dialog with version, credits, privacy statement (no data collected) and a licence pointer. It shares a row with "Smazat postup", so the layout did not grow.
+- Crow button: a warm additive glow behind it when ready.
+- Fireflies were first drawn as large haloes that read as grey blobs on the purple sky. Changed to a small glow + 3 px bright core.

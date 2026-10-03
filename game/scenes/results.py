@@ -8,7 +8,8 @@ import pygame
 from .. import assets, progression
 from ..config import C_GOLD, C_OUTLINE, C_TEXT, H, W
 from ..ui.widgets import Button, draw_icon_frame, draw_panel
-from ..util import ease_out_back, fmt_num, fmt_time
+from ..gfx.particles import FEATHER, ParticleSystem
+from ..util import ease_out_back, ease_out_cubic, fmt_num, fmt_time
 from .base import Dialog, Scene, draw_bg
 
 
@@ -71,6 +72,8 @@ class ResultsScene(Scene):
         self.add(Button((30, H - 72, W - 60, 60), "Menu", self.back, icon="back", style="secondary"))
         if run.cfg.mode == "daily":
             self.b_again.text = "VÝBĚR"
+        self.fx = ParticleSystem(160)
+        self._emit_t = 0.0
         assets.audio.play("victory" if self.victory else "coin")
 
     def _msg_pages(self, font, w: int, h: int) -> list[list[str]]:
@@ -102,6 +105,23 @@ class ResultsScene(Scene):
         if self._page_t > 4.0:
             self._page_t = 0.0
             self._page += 1
+        # konfety při výhře, pomalu padající peří při prohře
+        self._emit_t -= dt
+        if self._emit_t <= 0 and self.t < 12:
+            rng = self.fx.rng
+            if self.victory:
+                self._emit_t = 0.05
+                col = rng.choice(((255, 214, 70), (255, 120, 90), (120, 220, 255), (150, 255, 140), (255, 250, 240)))
+                self.fx.emit(rng.uniform(0, W), -10, rng.uniform(-30, 30), rng.uniform(60, 140), 4.0, FEATHER, col)
+            else:
+                self._emit_t = 0.35
+                self.fx.emit(rng.uniform(0, W), -10, rng.uniform(-20, 20), rng.uniform(20, 50), 6.0, FEATHER,
+                             (240, 236, 228))
+        self.fx.update(dt)
+
+    def _count(self, delay: float, dur: float = 0.7) -> float:
+        """Postup „napočítávání“ čísla (0 → 1) s prodlevou."""
+        return ease_out_cubic(max(0.0, min(1.0, (self.t - delay) / dur)))
 
     def again(self) -> None:
         from .game import GameScene, build_config, replay_allowed
@@ -154,6 +174,7 @@ class ResultsScene(Scene):
         else:
             title, col = ("PADLA!" if run.char.female else "PADL!"), (255, 110, 100)
             sub = "Lišky tentokrát vyhrály. Příště!"
+        self.fx.draw(surf, 0, 0)
         font.draw(surf, title, (W // 2, 20 + (1 - k) * -60), col, 7, "midtop", outline=C_OUTLINE)
         font.draw(surf, sub, (W // 2, 102), C_TEXT, 2, "midtop", outline=C_OUTLINE)
         # statistiky
@@ -161,8 +182,10 @@ class ResultsScene(Scene):
         draw_panel(surf, r, (52, 38, 60))
         img = assets.sprites.players[run.char.id].frames[0][int(self.t * 3) % 2]
         surf.blit(img, (r.x + 16, r.y + 18))
-        stats = [("Čas", fmt_time(run.time)), ("Zabití", fmt_num(run.kills)), ("Úroveň", str(run.level)),
-                 ("Bossové", str(len(run.bosses_killed))), ("Skóre", fmt_num(self.score))]
+        c = [self._count(0.25 + i * 0.12) for i in range(5)]
+        stats = [("Čas", fmt_time(run.time * c[0])), ("Zabití", fmt_num(run.kills * c[1])),
+                 ("Úroveň", str(round(run.level * c[2]))), ("Bossové", str(round(len(run.bosses_killed) * c[3]))),
+                 ("Skóre", fmt_num(self.score * c[4]))]
         x0 = r.x + 90
         for i, (a, b) in enumerate(stats):
             y = r.y + 14 + i * 30
@@ -187,7 +210,7 @@ class ResultsScene(Scene):
             yy += 22
         mult = self.rewards["mult"]
         egg = assets.icons.get("cur_egg", 4)
-        total = self.rewards["eggs"] * (2 if self.doubled else 1)
+        total = int(self.rewards["eggs"] * (2 if self.doubled else 1) * self._count(0.9, 0.9))
         tx = rr.right - 16
         font.draw(surf, "Celkem", (tx, rr.y + 14), (220, 210, 200), 2, "topright")
         font.draw(surf, f"{fmt_num(total)}", (tx, rr.y + 40), C_GOLD, 4, "topright", outline=C_OUTLINE)

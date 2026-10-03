@@ -4,9 +4,9 @@ from __future__ import annotations
 import pygame
 
 from .. import assets, device
-from ..config import C_OUTLINE, C_TEXT, W
+from ..config import C_OUTLINE, C_TEXT, VERSION, W
 from ..ui.widgets import Button, draw_bar, draw_panel, draw_title_bar, MARGIN
-from .base import Dialog, Scene
+from .base import Dialog, Scene, draw_scene_bg
 
 SEASON_OPTS = [("auto", "Podle data"), ("off", "Vypnuto"), ("halloween", "Halloween"), ("christmas", "Vánoce"),
                ("easter", "Velikonoce")]
@@ -35,7 +35,9 @@ class SettingsScene(Scene):
         self.b_season = self.add(Button((W - 250, y, 230, 58), "", self.cycle_season, scale=2))
         self.season_y = y
         y += 80
-        self.add(Button((30, y, W - 60, 64), "Smazat postup", self.reset, icon="skull", style="danger"))
+        half = (W - 72) // 2
+        self.add(Button((30, y, half, 64), "O hře", self.about, icon="book", style="secondary"))
+        self.add(Button((42 + half, y, half, 64), "Smazat postup", self.reset, icon="skull", style="danger"))
         self._sync()
         _ = st
 
@@ -75,6 +77,13 @@ class SettingsScene(Scene):
         self.save.save()
         self._sync()
 
+    def about(self) -> None:
+        self.modal = Dialog(f"Last Chicken v{VERSION}",
+                            "Grafika, hudba i zvuky jsou generované přímo v kódu. Postaveno na pygame-ce (LGPL). "
+                            "Hra nesbírá žádná osobní data a nic neodesílá – postup se ukládá jen v zařízení. "
+                            "Reklamy ve hře jsou jen ukázka. Licence viz LICENSES.md.",
+                            [("Zavřít", None, "primary")], icon="book")
+
     def reset(self) -> None:
         def stage2():
             self.modal = Dialog("Opravdu?", "Poslední šance. Slepice zapomene úplně všechno.",
@@ -89,7 +98,7 @@ class SettingsScene(Scene):
 
     def draw(self, surf) -> None:
         font = assets.font
-        surf.fill((34, 32, 42))
+        draw_scene_bg(surf, self.t, (34, 32, 42))
         draw_title_bar(surf, "NASTAVENÍ")
         st = self.save.settings
         for key, label, y in self.vol_rows:

@@ -23,9 +23,8 @@ def _compact(v: float) -> str:
 
 
 def _dim(surf, a: int = 170) -> None:
-    s = pygame.Surface((W, H), pygame.SRCALPHA)
-    s.fill((12, 6, 18, a))
-    surf.blit(s, (0, 0))
+    from ..scenes.base import dim_layer
+    surf.blit(dim_layer(a, (12, 6, 18)), (0, 0))
 
 
 class Overlay:

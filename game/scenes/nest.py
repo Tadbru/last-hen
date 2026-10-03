@@ -8,7 +8,7 @@ from ..config import C_GOLD, C_OUTLINE, C_TEXT, W
 from ..data.meta import NEST_UPGRADES
 from ..ui.widgets import Button, currency_row, draw_icon_frame, draw_panel, draw_title_bar, MARGIN
 from ..util import fmt_num
-from .base import Dialog, Scene
+from .base import Dialog, Scene, draw_scene_bg
 
 
 class NestScene(Scene):
@@ -75,7 +75,7 @@ class NestScene(Scene):
 
     def draw(self, surf) -> None:
         font = assets.font
-        surf.fill((44, 32, 34))
+        draw_scene_bg(surf, self.t, (44, 32, 34))
         draw_title_bar(surf, "HNÍZDO")
         font.draw(surf, "Bonus za úroveň · pro všechna zvířata", (W // 2, 74), (220, 200, 190), 2, "midtop")
         currency_row(surf, W // 2, 116, self.save, center=True)

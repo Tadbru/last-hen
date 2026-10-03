@@ -9,16 +9,21 @@ from .. import assets
 from ..config import C_GOLD, C_OUTLINE, C_TEXT, H, W
 from ..data.passives import PASSIVES
 from ..util import clamp, fmt_num, fmt_time
-from .widgets import draw_bar
+from ..gfx.particles import blit_add, glow_sprite
+from .widgets import Ghost, draw_bar
 
 CROW_POS = (W - 74, H - 84)
 CROW_R = 50
 PAUSE_RECT = pygame.Rect(W - 70, 22, 62, 58)
+_ghosts: dict = {}          # id(boss ctrl) -> Ghost (bílá stopa ztraceného HP)
+_clock = [0.0]
 
 
 def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
     font = assets.font
     icons = assets.icons
+    dt = min(0.1, max(0.0, t - _clock[0]))
+    _clock[0] = t
     # XP bar
     ratio = run.xp / run.xp_next if run.xp_next else 0
     draw_bar(surf, (4, 4, W - 8, 12), ratio, (80, 200, 255), back=(20, 30, 50))
@@ -74,7 +79,13 @@ def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
         if not e.alive:
             continue
         bw = W - 60
-        draw_bar(surf, (30, yb, bw, 14), e.hp / e.max_hp, (220, 50, 60), back=(50, 20, 30))
+        g = _ghosts.get(id(ctrl))
+        if g is None:
+            if len(_ghosts) > 16:
+                _ghosts.clear()
+            g = _ghosts[id(ctrl)] = Ghost(e.hp / e.max_hp)
+        draw_bar(surf, (30, yb, bw, 14), e.hp / e.max_hp, (220, 50, 60), back=(50, 20, 30),
+                 ghost=g.update(e.hp / e.max_hp, dt))
         if ctrl.enraged:
             pygame.draw.rect(surf, (255, 80, 60), (28, yb - 2, bw + 4, 18), 2)
         font.draw(surf, ctrl.name, (W // 2, yb - 4), (255, 220, 200), 2, "midbottom", outline=C_OUTLINE)
@@ -158,6 +169,8 @@ def _crow_button(surf, run, t: float) -> None:
     col = (234, 150, 40) if ready else (70, 52, 76)
     if ready:
         k = 0.5 + 0.5 * math.sin(t * 7)
+        gl = glow_sprite(22, (150, 90, 30), 0.6 + 0.4 * k)
+        blit_add(surf, [(gl, (cx - gl.get_width() // 2, cy - gl.get_height() // 2))])
         pygame.draw.circle(surf, (255, 230, 120), (cx, cy), int(r + 6 + 4 * k), 3)
     pygame.draw.circle(surf, C_OUTLINE, (cx, cy), r + 3)
     pygame.draw.circle(surf, col, (cx, cy), r)

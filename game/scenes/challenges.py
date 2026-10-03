@@ -8,7 +8,7 @@ from ..config import C_GOLD, C_OUTLINE, W
 from ..data.meta import CHALLENGES
 from ..ui.widgets import Button, ScrollArea, draw_panel, draw_title_bar, MARGIN
 from ..util import fmt_num
-from .base import Scene
+from .base import Scene, draw_scene_bg
 
 ROW = 120
 
@@ -37,7 +37,7 @@ class ChallengesScene(Scene):
 
     def draw(self, surf) -> None:
         font = assets.font
-        surf.fill((34, 30, 44))
+        draw_scene_bg(surf, self.t, (34, 30, 44))
         draw_title_bar(surf, "VÝZVY")
         done = sum(1 for c in CHALLENGES if self.save["challenges"].get(c["id"]))
         font.draw(surf, f"Splněno {done}/{len(CHALLENGES)}", (W // 2, 80), (210, 210, 230), 2, "midtop")

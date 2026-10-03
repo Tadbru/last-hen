@@ -10,27 +10,73 @@ from ..config import C_OUTLINE, C_PANEL, C_PANEL_HI, C_TEXT
 from ..util import mul_color
 
 
+NOTCH = 3            # zkosené rohy panelů = 1 art pixel (pixel-art „bevel“)
+
+
+def notched_rect(surf, color, rect, n: int = NOTCH) -> None:
+    """Obdélník s useknutými rohy (n px) – pixelový vzhled místo ostrých pravých úhlů."""
+    r = pygame.Rect(rect)
+    if r.w <= 2 * n or r.h <= 2 * n:
+        pygame.draw.rect(surf, color, r)
+        return
+    pygame.draw.rect(surf, color, (r.x + n, r.y, r.w - 2 * n, r.h))
+    pygame.draw.rect(surf, color, (r.x, r.y + n, r.w, r.h - 2 * n))
+
+
 def draw_panel(surf, rect, color=C_PANEL, border=C_OUTLINE, shadow: bool = True, hi: bool = True) -> None:
     r = pygame.Rect(rect)
     if shadow:
-        pygame.draw.rect(surf, (12, 8, 16), r.move(0, 5))
-    pygame.draw.rect(surf, border, r)
+        notched_rect(surf, (12, 8, 16), r.move(0, 5))
+    notched_rect(surf, border, r)
     inner = r.inflate(-6, -6)
-    pygame.draw.rect(surf, color, inner)
-    if hi:
-        pygame.draw.rect(surf, mul_color(color, 1.25), (inner.x, inner.y, inner.w, 3))
-        pygame.draw.rect(surf, mul_color(color, 0.75), (inner.x, inner.bottom - 3, inner.w, 3))
+    notched_rect(surf, color, inner)
+    if hi and inner.w > 12:
+        # světlo shora: světlá horní hrana + světlý levý okraj, tmavá spodní hrana
+        light = mul_color(color, 1.25)
+        pygame.draw.rect(surf, light, (inner.x + NOTCH, inner.y, inner.w - 2 * NOTCH, 3))
+        pygame.draw.rect(surf, mul_color(color, 1.1), (inner.x, inner.y + NOTCH, 3, inner.h - 2 * NOTCH - 3))
+        pygame.draw.rect(surf, mul_color(color, 0.75), (inner.x + NOTCH, inner.bottom - 3, inner.w - 2 * NOTCH, 3))
 
 
-def draw_bar(surf, rect, ratio: float, color, back=(30, 22, 36), border=C_OUTLINE) -> None:
+def draw_bar(surf, rect, ratio: float, color, back=(30, 22, 36), border=C_OUTLINE, ghost: float | None = None) -> None:
+    """Pruh s rámečkem, leskem a volitelnou „ghost“ stopou (světlý zbytek po ztrátě, který pomalu dobíhá)."""
     r = pygame.Rect(rect)
-    pygame.draw.rect(surf, border, r.inflate(4, 4))
+    notched_rect(surf, border, r.inflate(4, 4), 2)
     pygame.draw.rect(surf, back, r)
+    pygame.draw.rect(surf, mul_color(back, 0.7), (r.x, r.y, r.w, max(1, r.h // 4)))
+    ratio = max(0.0, min(1.0, ratio))
+    if ghost is not None and ghost > ratio:
+        gw = int(r.w * min(1.0, ghost))
+        pygame.draw.rect(surf, (255, 240, 220), (r.x, r.y, gw, r.h))
     if ratio > 0:
         fill = r.copy()
-        fill.w = int(r.w * max(0.0, min(1.0, ratio)))
+        fill.w = int(r.w * ratio)
         pygame.draw.rect(surf, color, fill)
         pygame.draw.rect(surf, mul_color(color, 1.3), (fill.x, fill.y, fill.w, max(1, r.h // 4)))
+        if r.h >= 8:
+            pygame.draw.rect(surf, mul_color(color, 0.72), (fill.x, fill.bottom - max(1, r.h // 5), fill.w,
+                                                           max(1, r.h // 5)))
+
+
+class Ghost:
+    """Stav pro ghost stopu pruhu: drží se chvíli na staré hodnotě, pak plynule dobíhá."""
+    __slots__ = ("v", "hold")
+
+    def __init__(self, v: float = 1.0) -> None:
+        self.v = v
+        self.hold = 0.0
+
+    def update(self, target: float, dt: float) -> float:
+        if target >= self.v:
+            self.v = target
+            self.hold = 0.0
+        else:
+            if self.hold <= 0 and self.v - target > 0.002:
+                self.hold = 0.35
+            self.hold -= dt
+            if self.hold <= 0:
+                self.v = max(target, self.v - dt * 0.6)
+        return self.v
 
 
 # Výplně dost tmavé pro bílý text (kontrast ≥ 3:1 podle WCAG), text navíc s tmavým obrysem.
@@ -101,6 +147,8 @@ class Button:
         if self.pressed:
             r.y += 3
         draw_panel(surf, r, base, shadow=not self.pressed)
+        if self.style == "primary" and self.enabled and not self.pressed:
+            _shine(surf, r, base, t + (self.rect.x + self.rect.y) * 0.003)
         # zvýraznění až nad panelem (B-29: stín panelu dřív mazal spodní hranu)
         if self.selected:
             draw_frame(surf, r, self.sel_color, 3, 6)
@@ -134,6 +182,25 @@ class Button:
             br = pygame.Rect(r.right - bw - 2, r.y - 8, bw, 16)
             pygame.draw.rect(surf, (220, 50, 50), br)
             font.draw(surf, self.badge, br.center, (255, 255, 255), 1, "center", shadow=False)
+
+
+def _shine(surf, r: pygame.Rect, base, t: float) -> None:
+    """Šikmý lesk, který jednou za ~4 s přejede přes hlavní tlačítko (jemný „živý“ pohyb menu)."""
+    period, dur = 4.0, 0.7
+    ph = t % period
+    if ph > dur:
+        return
+    inner = r.inflate(-12, -12)
+    k = ph / dur
+    x = inner.x - 40 + (inner.w + 80) * k
+    old = surf.get_clip()
+    surf.set_clip(inner.clip(old) if old else inner)
+    col = mul_color(base, 1.28)
+    for off, w in ((0, 15), (24, 6)):
+        xx = x + off
+        pygame.draw.polygon(surf, col, [(xx, inner.bottom), (xx + w, inner.bottom), (xx + w + 24, inner.y),
+                                        (xx + 24, inner.y)])
+    surf.set_clip(old)
 
 
 class ScrollArea:
@@ -193,9 +260,10 @@ class ScrollArea:
 def draw_icon_frame(surf, rect, icon: str, evo: bool = False, gray: bool = False, scale: int = 3,
                     color=(60, 46, 66), border=C_OUTLINE) -> None:
     r = pygame.Rect(rect)
-    pygame.draw.rect(surf, border, r)
-    pygame.draw.rect(surf, (255, 200, 60) if evo else color, r.inflate(-4, -4))
+    notched_rect(surf, border, r, 2)
+    notched_rect(surf, (255, 200, 60) if evo else color, r.inflate(-4, -4), 2)
     pygame.draw.rect(surf, color, r.inflate(-8, -8))
+    pygame.draw.rect(surf, mul_color(color, 0.78), (r.x + 4, r.y + 4, r.w - 8, 3))
     img = assets.icons.get(icon, scale, evo=evo, gray=gray)
     surf.blit(img, img.get_rect(center=r.center))
 
@@ -225,5 +293,5 @@ def draw_title_bar(surf, title: str, y: int = 18) -> None:
     font.draw(surf, title, (W // 2, y), (255, 230, 150), sc, "midtop", outline=C_OUTLINE)
 
 
-__all__ = ["Button", "ScrollArea", "draw_panel", "draw_bar", "draw_icon_frame", "currency_row", "draw_title_bar",
+__all__ = ["Button", "Ghost", "ScrollArea", "draw_panel", "draw_bar", "notched_rect", "draw_icon_frame", "currency_row", "draw_title_bar",
            "C_PANEL_HI"]

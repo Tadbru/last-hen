@@ -55,6 +55,7 @@ class RunRenderer:
             from ..data.meta import SEASONS
             self.season_tint = SEASONS[run.cfg.season]["tint"]
         self.edges = self._make_edges()
+        self.hp_ghost = 1.0
         self._dust_t = 0.0
         self._amb = _Ambient(run.biome.id)
 
@@ -144,6 +145,7 @@ class RunRenderer:
         ox, oy = cam.ox, cam.oy
         dt_real = self.t - getattr(self, "_t_prev", self.t)
         self._t_prev = self.t
+        self._dt = dt_real
         self._ground(surf, ox, oy)
         self._zones(surf, ox, oy)
         run.particles.draw_decals(surf, ox, oy)
@@ -520,8 +522,13 @@ class RunRenderer:
         ratio = max(0.0, p.hp / st.max_hp)
         bx, by = x - bw / 2, y + 16
         pygame.draw.rect(surf, (24, 16, 28), (bx - 2, by - 2, bw + 4, 8))
+        # bílá stopa ztraceného zdraví pomalu dobíhá (jen vizuál)
+        self.hp_ghost = ratio if ratio >= self.hp_ghost else max(ratio, self.hp_ghost - 0.7 * getattr(self, "_dt", 0.016))
+        if self.hp_ghost > ratio:
+            pygame.draw.rect(surf, (255, 240, 220), (bx, by, bw * self.hp_ghost, 4))
         col = (90, 220, 90) if ratio > 0.5 else (240, 200, 60) if ratio > 0.25 else (240, 60, 60)
         pygame.draw.rect(surf, col, (bx, by, bw * ratio, 4))
+        pygame.draw.rect(surf, mul_color(col, 1.25), (bx, by, bw * ratio, 1))
 
     def _projs(self, surf, ox, oy) -> None:
         blits = []
@@ -814,9 +821,10 @@ class _Ambient:
             elif kind == "fly":
                 b = 0.5 + 0.5 * math.sin(self.t * 2.4 * sp + ph * 4)
                 k = b * night
-                if k > 0.12:
-                    g = glow_sprite(3, (190, 255, 110), k)
-                    adds.append((g, (px - 10, py - 10)))
+                if k > 0.2:
+                    adds.append((glow_sprite(2, (170, 240, 90), k), (px - 7, py - 7)))
+                    if k > 0.45:
+                        surf.fill((235, 255, 170), (px // 3 * 3, py // 3 * 3, 3, 3))
             elif kind == "ember":
                 k = 0.5 + 0.5 * math.sin(self.t * 5 + ph * 3)
                 g = glow_sprite(2, (255, 150, 50), 0.4 + 0.6 * k)

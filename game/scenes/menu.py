@@ -10,6 +10,7 @@ from .. import assets, progression
 from ..config import C_GOLD, C_OUTLINE, C_TEXT, H, VERSION, W
 from ..data.meta import SEASONS
 from ..gfx import pixelart as pa
+from ..gfx.particles import STAR, ParticleSystem, blit_add, glow_sprite
 from ..ui.widgets import Button, currency_row
 from .base import Dialog, Scene
 
@@ -41,7 +42,12 @@ class MenuScene(Scene):
                 b.badge = "!"
         self.foxes = [[random.uniform(-200, W), random.uniform(470, 540), random.uniform(30, 60)] for _ in range(5)]
         self.season = progression.season_for(None, self.save.settings.get("season", "auto"))
-        self.stars = [(random.randrange(W), random.randrange(420), random.random()) for _ in range(60)]
+        self.stars = [(random.randrange(W) // 2 * 2, random.randrange(420) // 2 * 2, random.random()) for _ in range(60)]
+        # světlušky nad trávou a třpytky na logu
+        self.flies = [[random.uniform(0, W), random.uniform(380, 560), random.uniform(0, 6.3), random.uniform(0.6, 1.3)]
+                      for _ in range(12)]
+        self.fx = ParticleSystem(80)
+        self._twinkle = 0.6
 
     def enter(self) -> None:
         super().enter()
@@ -133,24 +139,37 @@ class MenuScene(Scene):
             if f[0] > W + 60:
                 f[0] = -80
                 f[1] = random.uniform(470, 540)
+        for fl in self.flies:
+            fl[0] = (fl[0] + math.cos(self.t * 0.6 * fl[3] + fl[2]) * 16 * dt) % W
+            fl[1] += math.sin(self.t * 0.8 * fl[3] + fl[2] * 1.7) * 10 * dt
+        # občasný třpyt na logu
+        self._twinkle -= dt
+        if self._twinkle <= 0:
+            self._twinkle = random.uniform(0.5, 1.3)
+            x = random.uniform(120, W - 120)
+            y = random.choice((random.uniform(130, 190), random.uniform(206, 272)))
+            self.fx.emit(x, y, 0, 0, 0.45, STAR, (255, 250, 220), 3)
+        self.fx.update(dt)
 
     def draw(self, surf) -> None:
         font = assets.font
-        # obloha
-        for i in range(0, H, 8):
-            k = i / H
-            col = (int(30 + 40 * k), int(20 + 18 * k), int(60 + 10 * k))
-            pygame.draw.rect(surf, col, (0, i, W, 8))
+        surf.blit(_menu_backdrop(), (0, 0))
         for x, y, ph in self.stars:
-            if math.sin(self.t * 2 + ph * 10) > -0.3:
-                surf.fill((255, 250, 220), (x, y, 2, 2))
-        pygame.draw.circle(surf, (250, 240, 200), (430, 80), 34)
-        pygame.draw.circle(surf, (230, 220, 180), (440, 72), 8)
-        # kopec + stodola
-        pygame.draw.ellipse(surf, (40, 70, 44), (-200, 420, W + 400, 300))
-        barn = assets.sprites.misc["barn"]
-        surf.blit(pa.silhouette(barn, (26, 40, 30)), (300, 330))
-        pygame.draw.rect(surf, (52, 90, 52), (0, 500, W, H - 500))
+            tw = math.sin(self.t * 2 + ph * 10)
+            if tw > -0.3:
+                surf.fill((255, 250, 220) if tw > 0.6 else (190, 180, 200), (x, y, 2, 2))
+        # měsíc se září
+        blit_add(surf, [(glow_sprite(16, (90, 84, 60), 0.9 + 0.1 * math.sin(self.t * 1.5)), (430 - 49, 80 - 49))])
+        surf.blit(_moon(), (430 - 36, 80 - 36))
+        flies = []
+        for x, y, ph, sp in self.flies:
+            k = 0.5 + 0.5 * math.sin(self.t * 2.2 * sp + ph * 3)
+            if k > 0.2:
+                flies.append((glow_sprite(2, (170, 240, 90), k), (x - 7, y - 7)))
+        blit_add(surf, flies)
+        for x, y, ph, sp in self.flies:
+            if math.sin(self.t * 2.2 * sp + ph * 3) > -0.1:
+                surf.fill((235, 255, 170), (int(x) // 3 * 3, int(y) // 3 * 3, 3, 3))
         for f in self.foxes:
             a = assets.sprites.enemies["fox"]
             img = a.frames[0][int(self.t * 6 + f[0]) % 2]
@@ -164,6 +183,7 @@ class MenuScene(Scene):
         wob = 1 if self.tap_t > 0 and int(self.t * 30) % 2 else 0
         font.draw(surf, "LAST", (W // 2 + wob, 120 + bounce), (255, 240, 220), 8, "midtop", outline=C_OUTLINE)
         font.draw(surf, "CHICKEN", (W // 2 - wob, 196 + bounce), C_GOLD, 8, "midtop", outline=C_OUTLINE)
+        self.fx.draw(surf, 0, -bounce)
         font.draw(surf, "poslední slepice proti zombie liškám", (W // 2, 290), (230, 210, 240), 2, "midtop",
                   outline=C_OUTLINE)
         # slepice
@@ -179,3 +199,52 @@ class MenuScene(Scene):
         font.draw(surf, f"v{VERSION}", (W - 8, H - 4), (200, 215, 190), 2, "bottomright", outline=C_OUTLINE)
         self.draw_buttons(surf)
         self.draw_overlays(surf)
+
+
+_BACKDROP: list = []
+
+
+def _menu_backdrop() -> pygame.Surface:
+    """Statické pozadí menu (předrenderované jednou): noční obloha v pixelových pásech, kopec, stodola,
+    tráva z dlaždice Farmy ztmavená do noci."""
+    if _BACKDROP:
+        return _BACKDROP[0]
+    from ..data.biomes import BIOMES
+    from ..gfx.tiles import TILE, ground_tiles
+    s = pygame.Surface((W, H))
+    for i in range(0, H, 6):
+        k = i / H
+        col = (int(30 + 40 * k), int(20 + 18 * k), int(60 + 10 * k))
+        s.fill(col, (0, i, W, 6))
+    # kopec – pixelová elipsa (kreslená v art pixelech a zvětšená ×3)
+    low = pygame.Surface((W // 3 + 2, 110), pygame.SRCALPHA)
+    pygame.draw.ellipse(low, (40, 70, 44), (-66, 0, W // 3 + 134, 100))
+    pygame.draw.ellipse(low, (52, 86, 52), (-66, 0, W // 3 + 134, 100), 1)
+    s.blit(pygame.transform.scale(low, (low.get_width() * 3, low.get_height() * 3)), (0, 420))
+    barn = assets.sprites.misc["barn"]
+    s.blit(pa.silhouette(barn, (26, 40, 30)), (300, 330))
+    # tráva = dlaždice herní mapy, ztmavená do noci
+    grass = pygame.Surface((W, H - 500))
+    tiles = ground_tiles(BIOMES["farm"])
+    for ty in range(0, grass.get_height(), TILE):
+        for tx in range(0, W, TILE):
+            grass.blit(tiles[(tx // TILE + ty // TILE) % len(tiles)], (tx, ty))
+    grass.fill((120, 128, 170), special_flags=pygame.BLEND_MULT)
+    s.blit(grass, (0, 500))
+    s.fill((30, 52, 34), (0, 500, W, 3))
+    _BACKDROP.append(s)
+    return s
+
+
+def _moon() -> pygame.Surface:
+    if len(_BACKDROP) > 1:
+        return _BACKDROP[1]
+    _menu_backdrop()
+    low = pygame.Surface((25, 25), pygame.SRCALPHA)
+    pygame.draw.circle(low, (250, 240, 200), (12, 12), 11)
+    pygame.draw.circle(low, (230, 220, 180), (15, 9), 3)
+    pygame.draw.circle(low, (236, 226, 186), (8, 15), 2)
+    pygame.draw.arc(low, (214, 202, 168), (1, 1, 23, 23), 3.6, 5.8, 1)
+    m = pygame.transform.scale(low, (75, 75))
+    _BACKDROP.append(m)
+    return m

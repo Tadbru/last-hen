@@ -100,9 +100,7 @@ class Dialog:
 
     def draw(self, surf) -> None:
         font = assets.font
-        dim = pygame.Surface((W, H), pygame.SRCALPHA)
-        dim.fill((10, 6, 14, 170))
-        surf.blit(dim, (0, 0))
+        surf.blit(dim_layer(170), (0, 0))
         k = min(1.0, self.t * 6)
         r = self.rect.inflate(-(1 - k) * 60, -(1 - k) * 60)
         if self.ad:
@@ -266,3 +264,70 @@ def draw_bg(surf, t: float, color=(40, 28, 48), stripes=(48, 34, 58)) -> None:
     for i in range(-2, H // 32 + 3):
         y = i * 64 + off
         pygame.draw.polygon(surf, stripes, [(0, y), (W, y - 120), (W, y - 90), (0, y + 30)])
+
+
+# --- sdílené pozadí obrazovek menu ------------------------------------------------------------
+_BG_CACHE: dict = {}
+_DIM_CACHE: dict = {}
+BG_TILE = 48
+
+
+def dim_layer(alpha: int, col=(10, 6, 14)) -> pygame.Surface:
+    """Celoplošné ztmavení – jedna sdílená plocha místo alokace každý snímek."""
+    key = (alpha, col)
+    s = _DIM_CACHE.get(key)
+    if s is None:
+        s = pygame.Surface((W, H), pygame.SRCALPHA)
+        s.fill((*col, alpha))
+        _DIM_CACHE[key] = s
+    return s
+
+
+def _egg_pattern(color) -> pygame.Surface:
+    """Pozadí o rozměru obrazovky + jedna dlaždice navíc: jemný vzor vajíček (pixel art 3 px) a pixelová vinětace."""
+    from ..util import mul_color
+    w, h = W + BG_TILE, H + BG_TILE
+    s = pygame.Surface((w, h))
+    s.fill(color)
+    egg = [".##.", "####", "####", ".##."]
+    light = mul_color(color, 1.16)
+    dark = mul_color(color, 0.86)
+    for ty in range(0, h // BG_TILE + 1):
+        for tx in range(0, w // BG_TILE + 1):
+            ox = tx * BG_TILE + (BG_TILE // 2 if ty & 1 else 0)
+            oy = ty * BG_TILE
+            for yy, row in enumerate(egg):
+                for xx, ch in enumerate(row):
+                    if ch == "#":
+                        s.fill(light if yy < 2 else dark, (ox + 18 + xx * 3, oy + 16 + yy * 3, 3, 3))
+    return s
+
+
+def _bg_vignette() -> list:
+    out = []
+    col = (8, 4, 12)
+    top = pygame.Surface((W, 120), pygame.SRCALPHA)
+    for y in range(0, 120, 3):
+        top.fill((*col, int(150 * (1 - y / 120) ** 2)), (0, y, W, 3))
+    out.append((top, (0, 0)))
+    out.append((pygame.transform.flip(top, False, True), (0, H - 120)))
+    side = pygame.Surface((60, H), pygame.SRCALPHA)
+    for x in range(0, 60, 3):
+        side.fill((*col, int(110 * (1 - x / 60) ** 2)), (x, 0, 3, H))
+    out.append((side, (0, 0)))
+    out.append((pygame.transform.flip(side, True, False), (W - 60, 0)))
+    return out
+
+
+def draw_scene_bg(surf, t: float, color=(36, 26, 44)) -> None:
+    """Pozadí obrazovek menu: pomalu ujíždějící vzor vajíček + vinětace. Jedna velká blit, žádné alokace."""
+    bg = _BG_CACHE.get(color)
+    if bg is None:
+        bg = _BG_CACHE[color] = _egg_pattern(color)
+    off = int(t * 9) % BG_TILE
+    surf.blit(bg, (-off, -off))
+    vig = _BG_CACHE.get("vig")
+    if vig is None:
+        vig = _BG_CACHE["vig"] = _bg_vignette()
+    for img, pos in vig:
+        surf.blit(img, pos)

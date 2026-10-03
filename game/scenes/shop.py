@@ -12,7 +12,7 @@ from ..data.meta import CHEST_COST, SKINS
 from ..gfx import pixelart as pa
 from ..ui.widgets import Button, currency_row, draw_panel, draw_title_bar, MARGIN
 from ..util import fmt_num
-from .base import Dialog, Scene
+from .base import Dialog, Scene, draw_scene_bg
 
 
 class ShopScene(Scene):
@@ -127,7 +127,7 @@ class ShopScene(Scene):
 
     def draw(self, surf) -> None:
         font = assets.font
-        surf.fill((40, 30, 48))
+        draw_scene_bg(surf, self.t, (40, 30, 48))
         draw_title_bar(surf, "OBCHOD")
         currency_row(surf, W // 2, 100, self.save, center=True)
         c = CHARACTERS[self.char]

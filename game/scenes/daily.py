@@ -10,7 +10,7 @@ from ..data.characters import CHARACTERS
 from ..data.meta import DAILY_MOD_BY_ID
 from ..ui.widgets import Button, draw_panel, draw_title_bar, MARGIN
 from ..util import fmt_num
-from .base import Scene
+from .base import Scene, draw_scene_bg
 
 
 RUSH_DESC = "5 bossů za sebou. Start s 10 level-upy, bossové sypou XP, elity bedny."
@@ -48,7 +48,7 @@ class DailyScene(Scene):
 
     def draw(self, surf) -> None:
         font = assets.font
-        surf.fill((30, 36, 50))
+        draw_scene_bg(surf, self.t, (30, 36, 50))
         draw_title_bar(surf, "DENNÍ VÝZVA")
         d = self.save["daily"]
         font.draw(surf, f"Série přihlášení: {d.get('login_streak', 0)} dní · žetony: {self.save['tokens']}",
