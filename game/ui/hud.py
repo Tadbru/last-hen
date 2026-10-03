@@ -15,8 +15,17 @@ from .widgets import Ghost, draw_bar
 CROW_POS = (W - 74, H - 84)
 CROW_R = 50
 PAUSE_RECT = pygame.Rect(W - 70, 22, 62, 58)
+SLOTS_BOTTOM = 162          # spodní okraj řádků zbraní a pasivek
+BOSS_BAR_Y = 182            # první ukazatel bosse; další po BOSS_BAR_STEP
+BOSS_BAR_STEP = 42
 _ghosts: dict = {}          # id(boss ctrl) -> Ghost (bílá stopa ztraceného HP)
 _clock = [0.0]
+
+
+def world_top(run) -> int:
+    """Nejvyšší y, od kterého je svět vidět – nad ním leží HUD (sloty, ukazatele bossů a „Fáze“)."""
+    n = sum(1 for c in run.bosses if c.e.alive)
+    return SLOTS_BOTTOM if n == 0 else BOSS_BAR_Y + BOSS_BAR_STEP * (n - 1) + 36
 
 
 def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
@@ -29,11 +38,20 @@ def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
     draw_bar(surf, (4, 4, W - 8, 12), ratio, (80, 200, 255), back=(20, 30, 50))
     lv = f"Úr. {run.level}"
     font.draw(surf, lv, (8, 22), C_TEXT, 2, "topleft", outline=C_OUTLINE)
+    px = 16 + font.width(lv, 2)
     if run.pending_levelups > 0 and run.state == "playing":
         # level-up čeká na další pauzu – ukázat, že karta nepropadla
         a = int(170 + 85 * math.sin(t * 8))
-        font.draw(surf, f"+{run.pending_levelups}", (16 + font.width(lv, 2), 22), C_GOLD, 2, "topleft",
-                  outline=C_OUTLINE, alpha=a)
+        txt = f"+{run.pending_levelups}"
+        font.draw(surf, txt, (px, 22), C_GOLD, 2, "topleft", outline=C_OUTLINE, alpha=a)
+        px += font.width(txt, 2) + 10
+    if run.pending_chests and run.state == "playing":
+        # sebraná bedna čeká na další pauzu (až 8 s) – dřív o ní hráč nevěděl (B-75)
+        ci = icons.get("chest", 2)
+        surf.blit(ci, (px, 20 - int(abs(math.sin(t * 5)) * 3)))
+        if len(run.pending_chests) > 1:
+            font.draw(surf, f"×{len(run.pending_chests)}", (px + ci.get_width() + 3, 22), C_GOLD, 2, "topleft",
+                      outline=C_OUTLINE)
     # časovač
     if run.final_boss is not None:
         font.draw(surf, "BOSS!", (W // 2, 22), (255, 90, 80), 4, "midtop", outline=C_OUTLINE)
@@ -73,7 +91,7 @@ def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
     for i, (pid, lv) in enumerate(run.passives.items()):
         _slot(surf, x0 + i * 38, y0 + 40, PASSIVES[pid].icon, lv, False, maxlv=5)
     # boss bar
-    yb = 182
+    yb = BOSS_BAR_Y
     for ctrl in run.bosses:
         e = ctrl.e
         if not e.alive:
@@ -91,7 +109,7 @@ def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
         font.draw(surf, ctrl.name, (W // 2, yb - 4), (255, 220, 200), 2, "midbottom", outline=C_OUTLINE)
         if getattr(ctrl, "phase", 0):
             font.draw(surf, f"Fáze {ctrl.phase}/3", (W - 32, yb + 18), (255, 200, 180), 2, "topright", outline=C_OUTLINE)
-        yb += 42
+        yb += BOSS_BAR_STEP
     # bannery
     by = H * 0.3
     for text, col, life, maxl in run.banners[-3:]:

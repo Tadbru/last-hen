@@ -83,7 +83,7 @@ tests/smoke_test.py        headless smoke testy všech systémů
 - **Startovní zbraně zvířat** jsou exkluzivní pro dané zvíře (každé zvíře hraje jinak); 10 základních zbraní je v poolu pro všechny.
 - **Evoluce**: všech 10 základních zbraní + 6 startovních má evoluci (16 celkem). Otevře se bednou z elity/bosse, když je zbraň na úr. 8 a hráč vlastní pasivku.
 - **Tajný tučňák**: zbraň „Mražená ryba“ (bumerang, který zmrazuje), pasivka „Klouzání po břiše“ (při pohybu jedním směrem zrychluje až o 60 % a při plné rychlosti zraňuje, čím projede), slabina setrvačnost. Odemčení: 10× klepnout na logo v menu.
-- **Páv Diva**: odemčení splněním výzvy „Tisíc lišek“. „Drahé upgrady“ = o 25 % víc XP na úroveň. Hypnóza = zmatený nepřítel bloudí a dostává +25 % damage.
+- **Páv Diva**: odemčení splněním výzvy „Tisíc lišek“. „Drahé upgrady“ = o 10 % víc XP na úroveň (původně 25 %, změněno v B-52). Hypnóza = zmatený nepřítel bloudí a dostává +25 % damage.
 - **Kohout Elvis**: odemčení porážkou finálního bosse (libovolný mód).
 - **Obtížnosti**: Hard se odemkne výhrou na Normal, Nightmare výhrou na Hard. Násobí HP/damage/spawn i odměny.
 - **Mapy**: Farma od začátku; další se odemknou výhrou na předchozí mapě nebo koupí za vejce.
@@ -150,7 +150,8 @@ Všech 7 bodů „Definice hotovo“ je splněno:
   Před buildem běží smoke testy proti pygame-ce i proti pygame 2.1.0 (verze, kterou má python-for-android).
 - Kód je kompatibilní s pygame-ce (PC) i klasickým pygame 2.1 (Android): `device.fblits` místo `Surface.fblits`,
   noční osvětlení přes průhlednou vrstvu místo `BLEND_MULT` (na klasickém pygame 10× rychlejší).
-- Na telefonu: `SCALED | FULLSCREEN` (škálování dělá GPU, dotyky se mapují automaticky), nižší stropy entit,
+- Na telefonu: `FULLSCREEN` v nativním rozlišení, 540×960 škáluje hra sama (pygame.SCALED v pygame 2.1
+  na Androidu nefungoval), nižší stropy entit,
   save v `ANDROID_PRIVATE` (přežije aktualizace), pauza + uložení při odchodu do pozadí, tlačítko Zpět = Esc,
   vibrace a sdílení přes pyjnius, displej nezhasíná.
 - Rozhodnutí: ovládání zůstává jednoprsté (podle zadání) – joystick i tlačítko kokrhání jedním palcem,
@@ -168,7 +169,7 @@ Všech 7 bodů „Definice hotovo“ je splněno:
 - B-02 stroboskop: Zlatá bomba už nebliká, běžné záblesky max. 1× za 2 s a slabší, nový vypínač
   „Záblesky obrazovky“ v Nastavení. Záblesky za minutu ze 114–140 na ≤ 8.
 - Vibrace: na telefonu min. 0,35 s rozestup.
-- Prázdné level-upy: když už není co vylepšit, levelup se vyřeší sám (mince + 5 % zdraví) bez pauzy.
+- Prázdné level-upy: když už není co vylepšit, levelup se vyřeší sám (mince + 5 % zdraví) bez pauzy (později změněno: jen léčí 35 %, viz druhá vlna).
 - Mobil: level-up ignoruje dotyky 0,6 s po otevření, Skip se potvrzuje druhým klepnutím,
   Restart a Vzdát se v pauze mají potvrzovací dialog.
 - Stavy: mini-boss se při vzniku arény přenese dovnitř (dřív zmizel a zůstal v seznamu bossů –
@@ -231,3 +232,21 @@ Všech 7 bodů „Definice hotovo“ je splněno:
   i když boss stojí. B-63: sova, Alfa i déšť ve fázi 2 respektují `MAX_ENEMIES` (telefon 320).
 - B-64: dialog oživení a nápověda podle zvířete a rodu („Krocan Rambo padl…“, „střílí sám“), podtitul výhry
   podle mapy, každá varianta finálního bosse má vlastní hlášku fáze 2. B-65: Vyřadit vymění jen vyřazenou kartu.
+
+### Pátá vlna – po polish passu (B-67 – B-80)
+- B-67: částice záře a kroužků (GLOW/POP) vracejí slot do poolu – dřív se pool vyčerpal za ~1:45 a pak se
+  nevykreslila žádná částice. B-68: záblesk obrazovky dobíhá v každém stavu (vítězná animace už není bílá).
+  B-69: boss a elita při zásahu bliknou nejvýš 1× za 0,35 s (finální boss bílý ~18 % času místo 63–92 %).
+- B-70: finální boss přiletí 200 px vedle hráče (dřív pod ukazatelem zdraví v HUD); bubliny se drží pod
+  pásem HUD, a když nad hlavou není místo, ukážou se pod nohama mluvčího.
+- B-71: Skip v level-upu je na X (S je pohyb dolů); zámek 0,6 s platí i pro klávesy; mezerník bednu jen otevře.
+- B-72: elita za plotem arény zmizí, ale její bedna spadne dovnitř; neporažené elity při výhře odevzdají bednu.
+- B-73: kokrhání se nabije nejdřív za 6 s (Kohout 3 s) – dřív v pozdní hře každých 1,4 s.
+- B-74: víc čekajících level-upů (nejvýš 3) se spojí do jedné obrazovky; karta sečte hody rarity za každý
+  spojený level a dostane +1 úroveň navíc. Startovní bonus (boss rush) se vybírá dál kartu po kartě.
+  Rychlý mód: nejdelší řetěz 5 obrazovek místo 13, ~22 obrazovek za run místo ~27.
+- B-75: čekající bedna má v HUD ikonku (×N). B-76: finální boss říká jen hlášky své fáze.
+- B-77: pozadí menu plyne bez skoku (svislá perioda vzoru 2 dlaždice). B-78: texty (vtipy po prohře, Sbírka,
+  sezónní skin „zdarma v sezóně“). B-79: pozadí výsledků se generuje za ~3 ms místo ~65 ms (pixelově shodné).
+  B-80: README/PLAN a popisky módů („boss ve 2:30“ / „boss v 10:00“).
+- Balanc po vlně (bot, Farma, Normal, bez Hnízda): rychlý mód 81/112 výher (72 %), plný 9/14, boss rush 13/21.

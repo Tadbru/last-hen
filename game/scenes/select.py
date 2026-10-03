@@ -38,9 +38,9 @@ class SelectScene(Scene):
         self.map_rects = [pygame.Rect(M + i * 104, 524, 96, 94) for i in range(5)]
         half = (W - 2 * M - 12) // 2
         self.b_quick = self.add(Button((M, 652, half, 66), "Rychlý", lambda: self.set_mode("quick"),
-                                       sub="3 minuty", icon="clock"))
+                                       sub="boss ve 2:30", icon="clock"))
         self.b_full = self.add(Button((W - M - half, 652, half, 66), "Plný", lambda: self.set_mode("full"),
-                                      sub="10 minut", icon="clock"))
+                                      sub="boss v 10:00", icon="clock"))
         self.b_diff = []
         dw = (W - 2 * M - 24) // 3
         for i, did in enumerate(DIFF_ORDER):

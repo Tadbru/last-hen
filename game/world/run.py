@@ -34,6 +34,7 @@ ARENA_R = 430.0
 FLASH_GAP = 2.0            # min. rozestup běžných záblesků (s)
 PLAYER_FX_CAP = 0.3        # strop třesu od vlastních zbraní (offset ≈ 1 px)
 CROW_KILLS = 70
+CROW_MIN_CD = 6.0           # nejkratší doba nabití kokrhání (s) – v pozdní hře se dřív nabilo za 1–3 s (B-73)
 
 
 # Ladění délky módů (4. kolo reportu)
@@ -45,6 +46,7 @@ XP_STEEP = 0.12
 RUSH_BOSS_LEVELS = 4        # kolik úrovní XP vysype boss v boss rushi
 GIANT_K = 4 / 3             # zvětšení obrů
 PAUSE_GAP = 8.0             # min. herní čas mezi dvěma přerušeními (level-upy se mezitím spojí do jedné obrazovky)
+MERGE_MAX = 3               # kolik čekajících level-upů se nejvýš spojí do jedné obrazovky (B-74)
 BIG_FLASH = 0.07            # bílé bliknutí bosse/elity při zásahu (s)
 BIG_FLASH_GAP = 0.35        # …nejvýš jednou za tuto dobu → při trvalé palbě bílý max. ~20 % času (B-69)
 
@@ -143,6 +145,7 @@ class Run:
         self.pending_chests: list[str] = []
         self.pause_cd = 0.0             # odpočet do dalšího možného přerušení (B-51)
         self.offer = None
+        self.offer_boost = 0            # kolik čekajících level-upů navíc nabídka spojuje (B-74)
         self.chest_reward = None
         self.rerolls = cfg.rerolls
         self.banishes = cfg.banishes
@@ -150,6 +153,7 @@ class Run:
         self.kills = 0
         self.coins = 0
         self.crow_charge = 0.0
+        self.crow_cap = 1.0             # strop nabití – po kokrhání roste od 0 rychlostí 1/CROW_MIN_CD
         self.crows_used = 0
         self.crits = 0
         self.max_burst = 0
@@ -383,8 +387,15 @@ class Run:
                     else:
                         e.alive = False
                         self.particles.puff(e.x, e.y, 2, (200, 200, 200))
-            a = -math.pi / 2
-            x, y = p.x, p.y - 300
+                        if e.chest:
+                            # elita za plotem zmizí, ale její bedna spadne dovnitř arény (dřív propadla, B-72)
+                            d = math.sqrt(d2) or 1.0
+                            cx, cy = p.x + dx / d * lim, p.y + dy / d * lim
+                            self.pickups.append(Pickup(cx, cy, P_CHEST, 1))
+                            self.particles.stars(cx, cy - 10, 8, (255, 214, 70))
+            # vedle hráče, proti směru pohybu – dřív 300 px nad ním, tedy přesně pod ukazatelem zdraví v HUD (B-70)
+            side = -1.0 if p.dir_x >= 0 else 1.0
+            x, y = p.x + side * 200, p.y
         else:
             a = self.rng.uniform(0, math.tau)
             x, y = p.x + math.cos(a) * 420, p.y + math.sin(a) * 420
@@ -413,7 +424,7 @@ class Run:
             self.banner(ctrl.name, (255, 80, 80), 3.0)
             # finále začíná s plnými silami
             p.heal(p.stats.max_hp)
-            self.crow_charge = 1.0
+            self.crow_charge = self.crow_cap = 1.0
             self.add_text(p.x, p.y - 50, "Svítá! Plné síly!", (255, 230, 140), 2, 2.0)
             self.particles.stars(p.x, p.y - 20, 12, (255, 230, 120))
             if not self.headless and assets.audio:
@@ -588,7 +599,7 @@ class Run:
             return
         self.kills += 1
         self._kills_tick += 1
-        self.crow_charge = min(1.0, self.crow_charge + self.player.stats.crow_mult / CROW_KILLS)
+        self.crow_charge = min(self.crow_cap, self.crow_charge + self.player.stats.crow_mult / CROW_KILLS)
         self.discovered["enemies"].add(e.d.id)
         if src is not None:
             src.kills += 1
@@ -883,6 +894,7 @@ class Run:
             return False
         if not free:
             self.crow_charge = 0.0
+            self.crow_cap = 0.0
             self.crows_used += 1
         p = self.player
         st = p.stats
@@ -967,6 +979,8 @@ class Run:
         self.tick += 1
         self.time += dt
         self.flash_cd = max(0.0, self.flash_cd - real_dt)
+        if self.crow_cap < 1.0:
+            self.crow_cap = min(1.0, self.crow_cap + dt * self.player.stats.crow_mult / CROW_MIN_CD)
         if crow:
             self.crow()
 
@@ -1065,6 +1079,9 @@ class Run:
             self.sfx("heal", 0.6)
             return
         self.state = "levelup"
+        # víc čekajících level-upů = jedna obrazovka se silnější kartou místo řetězu 5–7 obrazovek (B-74)
+        # (startovní bonus – boss rush, rubber-banding – se vybírá v klidu kartu po kartě)
+        self.offer_boost = min(MERGE_MAX - 1, self.pending_levelups - 1) if self.time > 1.0 else 0
         self.offer = progression.make_offer(self)
         self.particles.burst_ring(self.player.x, self.player.y - 16, 14, (255, 220, 90), 210)
         self.particles.glow(self.player.x, self.player.y - 16, 54, (255, 210, 100), 0.3)
@@ -1080,6 +1097,7 @@ class Run:
     def resume(self) -> None:
         """Po výběru karty / zavření bedny."""
         self.offer = None
+        self.offer_boost = 0
         self.chest_reward = None
         self.state = "playing"
         if self.pending_levelups > 0:
@@ -1139,6 +1157,9 @@ class Run:
             if e.alive and n < 8:
                 e.alive = False
                 self.particles.puff(e.x, e.y, 3, (255, 230, 180), 60)
+                if e.chest and not e.boss:
+                    # neporažená elita odevzdá bednu – ve výsledcích se převede na mince (B-72)
+                    self.pickups.append(Pickup(e.x, e.y, P_CHEST, 1))
                 n += 1
         self.enemies = [e for e in self.enemies if e.alive]
         self.particles.update(dt)

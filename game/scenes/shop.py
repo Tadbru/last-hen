@@ -149,7 +149,13 @@ class ShopScene(Scene):
             hat = assets.sprites.hats[s["id"]]
             surf.blit(pa.scale(hat, 1.5), (r.x + 14, r.y + 18))
             font.draw(surf, s["name"], (r.x + 74, r.y + 10), (255, 240, 210), 2, "topleft", outline=C_OUTLINE)
-            tag = "vlastníš" if self.available(s) else ("sezónní" if s["season"] else "kosmetika")
+            owned = s["id"] in self.save["skins_owned"]
+            if owned:
+                tag = "vlastníš"
+            elif self.available(s):
+                tag = "zdarma v sezóně"      # sezónní skin je jen zapůjčený – po sezóně zmizí (B-78)
+            else:
+                tag = "sezónní" if s["season"] else "kosmetika"
             font.draw(surf, tag, (r.x + 74, r.y + 38), (180, 200, 180) if self.available(s) else (190, 180, 200), 2,
                       "topleft")
         y = self.chest_y

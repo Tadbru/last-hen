@@ -276,9 +276,10 @@ def dim_layer(alpha: int, col=(10, 6, 14)) -> pygame.Surface:
 
 
 def _egg_pattern(color) -> pygame.Surface:
-    """Pozadí o rozměru obrazovky + jedna dlaždice navíc: jemný vzor vajíček (pixel art 3 px) a pixelová vinětace."""
+    """Pozadí o rozměru obrazovky + rezerva na posun: jemný vzor vajíček (pixel art 3 px).
+    Liché řádky jsou posunuté o půl dlaždice, takže svisle se vzor opakuje až po 2 dlaždicích."""
     from ..util import mul_color
-    w, h = W + BG_TILE, H + BG_TILE
+    w, h = W + BG_TILE, H + 2 * BG_TILE
     s = pygame.Surface((w, h))
     s.fill(color)
     egg = [".##.", "####", "####", ".##."]
@@ -316,8 +317,9 @@ def draw_scene_bg(surf, t: float, color=(36, 26, 44)) -> None:
     bg = _BG_CACHE.get(color)
     if bg is None:
         bg = _BG_CACHE[color] = _egg_pattern(color)
-    off = int(t * 9) % BG_TILE
-    surf.blit(bg, (-off, -off))
+    off = int(t * 9)
+    # vodorovně je perioda 1 dlaždice, svisle 2 – dřív vzor každých 5,3 s poskočil o půl dlaždice (B-77)
+    surf.blit(bg, (-(off % BG_TILE), -(off % (2 * BG_TILE))))
     vig = _BG_CACHE.get("vig")
     if vig is None:
         vig = _BG_CACHE["vig"] = _bg_vignette()

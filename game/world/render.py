@@ -13,6 +13,7 @@ from ..gfx import pixelart as pa
 from ..gfx.particles import blit_add, cream_sprite, disc_sprite, glow_sprite, stink_line_sprite
 from ..gfx.sprites import angle_index
 from ..gfx.tiles import TILE
+from ..ui.hud import world_top
 from ..ui.widgets import notched_rect
 from ..util import clamp, lerp_color, mul_color
 from .entities import M_BOOMERANG, M_LOB, M_SPIRAL, M_WAVE, P_CHEST, P_COIN, P_GOLDEGG, P_MAGNET, P_WORM, P_XP
@@ -840,19 +841,31 @@ class RunRenderer:
 
     def _speech(self, surf, ox, oy) -> None:
         font = assets.font
+        top = world_top(self.run) + 6        # bubliny nikdy pod HUD (B-70)
         for e, text, life, dead in self.run.speech:
-            x, y = e.x - ox, e.y - oy - (e.spr.h if hasattr(e, "spr") and e.spr else 40) * 0.8 - 20
+            sh = e.spr.h if hasattr(e, "spr") and e.spr else 40
+            x, feet = e.x - ox, e.y - oy
+            y = feet - sh * 0.8 - 20
             lines = font.wrap(text, 230, 2)
             tw = max(font.width(ln, 2) for ln in lines) + 16
             th = len(lines) * font.line_h(2) + 10
+            tx = x                                   # špička ocásku míří na mluvčího
             x = clamp(x, tw / 2 + 6, W - tw / 2 - 6)
-            y = clamp(y, th + 60, H - 40)
             rect = pygame.Rect(0, 0, tw, th)
-            rect.midbottom = (x, y)
+            under = y - th < top                     # nad hlavou není místo → bublina pod nohy
+            if under:
+                rect.midtop = (x, clamp(feet + getattr(e, "r", 12) * 0.6 + 12, top + 8, H - 40 - th))
+            else:
+                rect.midbottom = (x, min(y, H - 40))
+            tx = clamp(tx, rect.x + 10, rect.right - 10)
             notched_rect(surf, (20, 12, 24), rect.inflate(6, 6))
             notched_rect(surf, (255, 250, 235), rect)
             pygame.draw.rect(surf, (226, 214, 196), (rect.x + 3, rect.bottom - 3, rect.w - 6, 3))
-            pygame.draw.polygon(surf, (255, 250, 235), [(x - 6, rect.bottom), (x + 6, rect.bottom), (x, rect.bottom + 8)])
+            if under:
+                pygame.draw.polygon(surf, (255, 250, 235), [(tx - 6, rect.top), (tx + 6, rect.top), (tx, rect.top - 8)])
+            else:
+                pygame.draw.polygon(surf, (255, 250, 235), [(tx - 6, rect.bottom), (tx + 6, rect.bottom),
+                                                            (tx, rect.bottom + 8)])
             yy = rect.y + 5
             for ln in lines:
                 font.draw(surf, ln, (rect.centerx, yy), (40, 24, 40), 2, "midtop", shadow=False)

@@ -37,10 +37,10 @@ class Overlay:
         self._pressed = None
         self.done = False
 
-    lock = 0.0       # s po otevření, kdy se ignorují dotyky (ochrana proti náhodnému klepnutí)
+    lock = 0.0       # s po otevření, kdy se ignorují dotyky i klávesy (ochrana proti náhodnému klepnutí, B-71)
 
     def handle(self, ev) -> None:
-        if ev.type in ("down", "up") and self.t < self.lock:
+        if ev.type in ("down", "up", "key") and self.t < self.lock:
             if self._pressed is not None:
                 self._pressed.pressed = False
                 self._pressed = None
@@ -107,7 +107,8 @@ class LevelUpOverlay(Overlay):
         self.pressed_card = -1
         y = H - 104
         self.b_reroll = Button((20, y, 160, 76), "Rerol", self._reroll, icon="reroll", style="blue", key=pygame.K_r)
-        self.b_skip = Button((190, y, 160, 76), "Skip", self._skip, icon="skip", style="secondary", key=pygame.K_s)
+        # Skip na X – S je pohyb dolů (WASD) a dvě klepnutí na S dřív zahodila level-up (B-71)
+        self.b_skip = Button((190, y, 160, 76), "Skip", self._skip, icon="skip", style="secondary", key=pygame.K_x)
         self.b_banish = Button((360, y, 160, 76), "Vyřadit", self._banish, icon="banish", style="danger",
                                key=pygame.K_b)
         self.buttons = [self.b_reroll, self.b_skip, self.b_banish]
@@ -117,7 +118,7 @@ class LevelUpOverlay(Overlay):
         r = self.run
         self.b_reroll.sub = f"zbývá {r.rerolls}"
         self.b_reroll.enabled = r.rerolls > 0
-        self.b_skip.sub = f"+{5 + r.level // 2} mincí"
+        self.b_skip.sub = f"+{progression.skip_coins(r)} mincí"
         self.b_banish.sub = f"zbývá {r.banishes}"
         self.b_banish.enabled = r.banishes > 0 and any(c.kind in ("weapon", "passive") for c in (r.offer or []))
         if not self.b_banish.enabled:
@@ -217,8 +218,14 @@ class LevelUpOverlay(Overlay):
         _dim(surf)
         k = ease_out_back(min(1.0, self.t * 3))
         font.draw(surf, "LEVEL UP!", (W // 2, 62 - (1 - k) * 40), (255, 220, 90), 6, "midtop", outline=C_OUTLINE)
-        font.draw(surf, f"Úroveň {run.level - run.pending_levelups + 1}", (W // 2, 140), C_TEXT, 3, "midtop",
-                  outline=C_OUTLINE)
+        lv0 = run.level - run.pending_levelups + 1
+        merged = progression.merged_levels(run)
+        # spojené level-upy (B-74): jedna obrazovka za několik úrovní místo řetězu obrazovek
+        head = f"Úroveň {lv0}–{lv0 + merged - 1}" if merged > 1 else f"Úroveň {lv0}"
+        font.draw(surf, head, (W // 2, 140), C_TEXT, 3, "midtop", outline=C_OUTLINE)
+        if merged > 1 and not self.banish_mode:
+            font.draw(surf, f"Spojené level-upy ({merged}): karta má +{progression.MERGE_BONUS} úroveň navíc",
+                      (W // 2, 176), C_GOLD, 2, "midtop", outline=C_OUTLINE)
         if self.banish_mode:
             font.draw(surf, "Klepni na kartu, kterou chceš vyřadit", (W // 2, 176), (255, 120, 120), 2, "midtop",
                       outline=C_OUTLINE)
@@ -285,6 +292,8 @@ class LevelUpOverlay(Overlay):
 
 # ---------------------------------------------------------------------------------------------
 class ChestOverlay(Overlay):
+    lock = 0.35      # mezerník = kokrhání: série stisků z boje bednu nesmí hned otevřít
+
     def __init__(self, scene) -> None:
         super().__init__(scene)
         self.reward = self.run.chest_reward
@@ -306,11 +315,9 @@ class ChestOverlay(Overlay):
             self.t = max(self.t, 1.0)
 
     def on_key(self, key) -> None:
-        if key in (pygame.K_SPACE, pygame.K_RETURN):
-            if not self.opened:
-                self.t = max(self.t, 1.0)
-            elif self.b_ok.visible:
-                self._close()
+        # mezerník bednu jen otevře; zavírá se Enterem nebo tlačítkem, aby kokrhání nepřeskočilo odměnu (B-71)
+        if key in (pygame.K_SPACE, pygame.K_RETURN) and not self.opened:
+            self.t = max(self.t, 1.0)
 
     def update(self, dt: float) -> None:
         super().update(dt)

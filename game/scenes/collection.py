@@ -147,7 +147,7 @@ class CollectionScene(Scene):
                 name, desc = d.name, f"{d.desc} na úroveň. {d.flavor}"
                 extra = ""
             if not known:
-                name, desc, extra = "???", "Ještě jsi to nepotkala. Hraj dál!", ""
+                name, desc, extra = "???", "Zatím neobjeveno. Hraj dál!", ""
             img = self._thumb(self.tab, iid, known)
             surf.blit(img, img.get_rect(center=(dr.x + 64, dr.y + 70)))
             font.draw(surf, name, (dr.x + 130, dr.y + 20), (255, 230, 170), 3, "topleft", outline=C_OUTLINE)

@@ -363,15 +363,18 @@ def _night_deco(name: str) -> pygame.Surface:
 _DECO: dict = {}
 
 
+_MOON: list = []
+
+
 def _moon() -> pygame.Surface:
-    if len(_BACKDROP) > 1:
-        return _BACKDROP[1]
-    _menu_backdrop()
+    # vlastní cache – výsledky (noc) dřív kvůli měsíci stavěly celé pozadí menu (B-79)
+    if _MOON:
+        return _MOON[0]
     low = pygame.Surface((25, 25), pygame.SRCALPHA)
     pygame.draw.circle(low, (250, 240, 200), (12, 12), 11)
     pygame.draw.circle(low, (230, 220, 180), (15, 9), 3)
     pygame.draw.circle(low, (236, 226, 186), (8, 15), 2)
     pygame.draw.arc(low, (214, 202, 168), (1, 1, 23, 23), 3.6, 5.8, 1)
     m = pygame.transform.scale(low, (75, 75))
-    _BACKDROP.append(m)
+    _MOON.append(m)
     return m

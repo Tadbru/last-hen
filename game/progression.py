@@ -14,6 +14,7 @@ from .util import fmt_num
 
 MAX_WEAPONS = 6
 MAX_PASSIVES = 6
+MERGE_BONUS = 1         # úroveň navíc pro kartu ze spojených level-upů – vyvažuje menší šíři buildu (B-74)
 
 
 @dataclass
@@ -84,6 +85,22 @@ def roll_rarity(run) -> int:
     return rar
 
 
+def merged_levels(run) -> int:
+    """Kolik čekajících level-upů jedna obrazovka spojuje (1 = obyčejný level-up)."""
+    return 1 + getattr(run, "offer_boost", 0)
+
+
+def _consume(run, gained: int) -> None:
+    """Výběr spotřebuje tolik čekajících level-upů, kolik úrovní spojení přidalo – nic se neztratí:
+    karta, která kvůli maximu přidá méně, spotřebuje méně a zbytek přijde na další obrazovce."""
+    n = max(1, min(merged_levels(run), gained))
+    run.pending_levelups = max(0, run.pending_levelups - n)
+
+
+def skip_coins(run) -> int:
+    return (5 + run.level // 2) * merged_levels(run)
+
+
 def _take_weighted(rng, pool: list):
     """Vytáhne (a odebere) jednoho kandidáta z poolu podle váhy."""
     total = sum(c[2] for c in pool)
@@ -97,11 +114,15 @@ def _take_weighted(rng, pool: list):
 
 
 def _card(run, kind: str, cid: str, rarity: int) -> Card:
+    # spojené level-upy (B-74): karta sečte vlastní hod rarity za každý spojený level – stejná očekávaná
+    # síla jako samostatné výběry, jen v jedné kartě; rámeček ukazuje raritu o stupeň za každý level navíc
+    boost = getattr(run, "offer_boost", 0)
+    levels = 1 + rarity + sum(1 + roll_rarity(run) for _ in range(boost)) + (MERGE_BONUS if boost else 0)
+    rarity = min(2, rarity + boost)
     if kind == "weapon":
         d = WEAPONS[cid]
         w = run.weapon(cid)
         cur = w.level if w else 0
-        levels = 1 + rarity
         to = min(MAX_WEAPON_LEVEL, cur + levels)
         if w is None:
             desc = d.desc
@@ -111,7 +132,6 @@ def _card(run, kind: str, cid: str, rarity: int) -> Card:
     if kind == "passive":
         d = PASSIVES[cid]
         cur = run.passives.get(cid, 0)
-        levels = 1 + rarity
         to = min(MAX_PASSIVE_LEVEL, cur + levels)
         n = to - cur
         desc = d.desc if n == 1 else f"{d.desc} (×{n})"
@@ -145,13 +165,16 @@ def make_offer(run, count: int = 3) -> list[Card]:
 
 
 def apply_card(run, card: Card) -> None:
+    gained = 1
     if card.kind == "weapon":
         run.level_weapon(card.id, card.to - card.cur if card.cur else card.to)
+        gained = card.to - card.cur
     elif card.kind == "passive":
         run.add_passive(card.id, card.to - card.cur)
+        gained = card.to - card.cur
     elif card.kind == "heal":
         run.player.heal(run.player.stats.max_hp * HEAL_FILL)
-    run.pending_levelups = max(0, run.pending_levelups - 1)
+    _consume(run, gained)
     run.resume()
 
 
@@ -164,9 +187,9 @@ def reroll(run) -> bool:
 
 
 def skip(run) -> int:
-    coins = 5 + run.level // 2
+    coins = skip_coins(run)
     run.coins += coins
-    run.pending_levelups = max(0, run.pending_levelups - 1)
+    run.pending_levelups = max(0, run.pending_levelups - merged_levels(run))
     run.resume()
     return coins
 

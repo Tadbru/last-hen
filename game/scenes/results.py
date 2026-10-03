@@ -264,6 +264,9 @@ def _backdrop(victory: bool) -> pygame.Surface:
         stops = [(0, (34, 30, 74)), (90, (86, 56, 108)), (160, (190, 98, 102)), (horizon, (248, 166, 96))]
     else:
         stops = [(0, (12, 9, 26)), (120, (30, 20, 50)), (horizon, (62, 34, 62))]
+    # řádek přechodu = jedna barva, nebo šachovnice dvou barev → fill + PixelArray místo set_at po pixelech
+    # (dřív ~70 ms zadrhnutí při prvním zobrazení výsledků, B-79)
+    pxa = pygame.PixelArray(low)
     for y in range(ah):
         for (y0, c0), (y1, c1) in zip(stops, stops[1:]):
             if y0 <= y < y1 or (y >= y1 and (y1, c1) == stops[-1]):
@@ -272,9 +275,10 @@ def _backdrop(victory: bool) -> pygame.Surface:
         steps = 6
         f = k * steps
         i = int(f)
-        for x in range(aw):
-            kk = (i + (1 if f - i > 0.5 and (x + y) & 1 else 0)) / steps
-            low.set_at((x, y), _mix(c0, c1, min(1.0, kk)))
+        pxa[:, y] = low.map_rgb(_mix(c0, c1, min(1.0, i / steps)))
+        if f - i > 0.5:
+            pxa[(y + 1) & 1::2, y] = low.map_rgb(_mix(c0, c1, min(1.0, (i + 1) / steps)))
+    del pxa
     rng = random.Random(7 if victory else 8)
     if victory:
         # napůl vyšlé slunce za kopcem
@@ -296,12 +300,14 @@ def _backdrop(victory: bool) -> pygame.Surface:
     body = [(52, 30, 50), (40, 24, 42), (30, 18, 34)] if victory else [(30, 22, 44), (24, 18, 36), (18, 13, 28)]
     for x in range(aw):
         top = int(horizon + 4 + 4 * math.sin(x * 0.045 + 0.6) + 2 * math.sin(x * 0.13))
-        for y in range(top, ah):
-            band = min(2, (y - top) // 30)
-            c = body[band]
-            if (y - top) % 30 > 27 and band < 2 and (x + y) & 1:
-                c = body[band + 1]
-            low.set_at((x, y), c)
+        # sloupec kopce = 3 pásy po 30 px, na spodních 2 řádcích pásu šachovnicový přechod do dalšího
+        low.fill(body[0], (x, top, 1, 30))
+        low.fill(body[1], (x, top + 30, 1, 30))
+        low.fill(body[2], (x, top + 60, 1, ah - top - 60))
+        for band, dy in ((0, 28), (0, 29), (1, 58), (1, 59)):
+            y = top + dy
+            if y < ah and (x + y) & 1:
+                low.set_at((x, y), body[band + 1])
         low.set_at((x, top), rim)
     s = pygame.transform.scale(low, (W, H))
     if not victory:

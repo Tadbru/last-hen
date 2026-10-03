@@ -15,6 +15,11 @@ FUNNY = [
     "Lišky jsou v šoku.", "Farmář by byl hrdý.", "Kurník je zase v bezpečí.", "Omeleta z lišek se podává.",
     "Kokrhání se neslo až do vesnice.", "Babička peče oslavný koláč.",
 ]
+# po prohře – vítězné hlášky („Kurník je zase v bezpečí.“) by tam lhaly (B-78)
+FUNNY_LOSS = [
+    "Lišky slaví. Zatím.", "Příště to vyjde!", "Kurník čeká na odplatu.", "Slepice se nevzdává.",
+    "Babička už chystá obvazy.", "Odveta bude za svítání.",
+]
 
 
 def share_text(run) -> str:
@@ -49,7 +54,8 @@ def make_share_image(run, victory: bool) -> str:
         font.draw(s, ln, (W // 2, y), (255, 255, 255), 3, "midtop", outline=C_OUTLINE)
         y += 38
     import random
-    font.draw(s, random.choice(FUNNY), (W // 2, y + 4), (255, 230, 160), 2, "midtop", outline=C_OUTLINE)
+    font.draw(s, random.choice(FUNNY if victory else FUNNY_LOSS), (W // 2, y + 4), (255, 230, 160), 2, "midtop",
+              outline=C_OUTLINE)
     # build
     x = W // 2 - len(run.weapons) * 30
     for w in run.weapons:

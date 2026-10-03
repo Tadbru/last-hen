@@ -49,9 +49,9 @@ Ikona a úvodní obrazovka se generují skriptem `python tools/make_app_assets.p
 |---|---|---|
 | Pohyb | drž levé tlačítko myši ve spodních 2/3 obrazovky a táhni (plovoucí joystick), nebo WASD / šipky | palec kdekoli ve spodních 2/3 |
 | Útok | automaticky | automaticky |
-| Kokrhání (special) | mezerník nebo velké tlačítko vpravo dole | tlačítko vpravo dole |
+| Kokrhání (special) | mezerník nebo velké tlačítko vpravo dole (nabíjí se zabíjením, nejdřív za 6 s) | tlačítko vpravo dole |
 | Pauza | Esc / P / tlačítko vpravo nahoře | tlačítko vpravo nahoře |
-| Karty při levelupu | klepnutí / klávesy 1, 2, 3, R = rerol, S = skip, B = vyřadit | klepnutí |
+| Karty při levelupu | klepnutí / klávesy 1, 2, 3, R = rerol, X = skip, B = vyřadit | klepnutí |
 | Debug | F3 overlay (FPS, entity, kolizní grid), F11 celá obrazovka | – |
 | Debug (s `--debug` nebo po F3) | F5 další boss, F6 levelup, F7 zabij vše, F8 nesmrtelnost, F9 připrav evoluce, F10 +1 min | – |
 
@@ -59,7 +59,7 @@ Tajemství: zkus 10× klepnout na logo v menu.
 
 ## Obsah
 
-**Módy:** Rychlý (Zombie Kohout přilétá ve 2:30, ~3 min), Plný (mini-bossové ve 2/4/6/8 min, finální boss v 10:00),
+**Módy:** Rychlý (Zombie Kohout přilétá ve 2:30, celkem ~3–4 min), Plný (mini-bossové ve 2/4/6/8 min, finální boss v 10:00),
 Denní výzva (seed z data, jeden pokus, modifikátor, lokální žebříček), Týdenní boss rush (všech 5 bossů za sebou).
 Obtížnosti Normal / Hard / Nightmare.
 
@@ -68,11 +68,11 @@ Obtížnosti Normal / Hard / Nightmare.
 | Zvíře | Startovní zbraň | Pasivka | Slabina | Odemčení |
 |---|---|---|---|---|
 | Slepice Božena | Vejce granát | každých 20 s zlaté vejce plné XP | průměrná | od začátku |
-| Kachna Kvak | Vodní pistole (prorazí řadu) | ve vodě/na ledu +40 % rychlost | 70 % životů | 500 vajec |
+| Kachna Kvak | Vodní pistole (prorazí řadu) | ve vodě/na ledu +40 % rychlost | 85 % životů | 500 vajec |
 | Husa Gerta | Zobák-šleh | +30 % životů | pomalá | 1 500 vajec |
 | Krocan Rambo | Brokovnice z peří | kritické zásahy ×3 | střílí pomaleji | 3 000 vajec |
 | Kohout Elvis | Zvukové vlny | kokrhání 2× rychleji | křehký | poraz Zombie Kohouta |
-| Páv Diva | Ocas-vějíř | hypnóza nepřátel | dražší levely | výzva „Tisíc lišek“ |
+| Páv Diva | Ocas-vějíř | hypnóza nepřátel | o 10 % víc XP na úroveň | výzva „Tisíc lišek“ |
 | Tajný tučňák | Mražená ryba (bumerang, mrazí) | klouzání po břiše – zrychluje a při plné rychlosti zraňuje | setrvačnost | easter egg |
 
 **Zbraně (16, každá 8 úrovní) a evoluce (16):** Vejce granát → Zlatá bomba, Kokrhací vlna → Apokalypsa,
@@ -96,7 +96,8 @@ variantu (Kohout Mlhoš, Kohout Kmotr, Kohout Yetti, Robokohout 3000). Všechny 
 **Biomy:** Farma (louže, ploty, stodoly, výbušné sudy), Temný les (koruny stromů, mlha, vlci), Opuštěné město
 (auta, bloky domů, potkani), Hory (kluzký sníh, led, laviny), Továrna na kuřata (pásy, lisy, robo-lišky).
 
-**Progrese:** levelup karty (běžná/vzácná/epická = +1/+2/+3 úrovně), rerol, skip za mince, vyřazení karty, bedny.
+**Progrese:** levelup karty (běžná/vzácná/epická = +1/+2/+3 úrovně; víc čekajících level-upů se spojí do
+jedné karty s úrovní navíc), rerol, skip za mince, vyřazení karty, bedny.
 Hnízdo (6 trvalých vylepšení × 5 úrovní), Sbírka (64 položek, odměny za 100 % kategorie), 18 výzev,
 Obchod (skiny pirát/kovboj/astronaut/ninja za zlatá vejce, truhly za žetony), denní login se sérií,
 sezónní témata (Halloween/Vánoce/Velikonoce podle data, přepínatelné v Nastavení), rubber-banding po brzké smrti.

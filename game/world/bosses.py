@@ -75,11 +75,15 @@ class BossCtrl:
         if (p.x - e.x) ** 2 + (p.y - e.y) ** 2 < (e.r + p.r) ** 2:
             p.take_damage(e.dmg * mult, e.x, e.y, "boss")
 
+    def quote_pool(self) -> tuple:
+        return self.quotes
+
     def maybe_quote(self, dt: float) -> None:
         self.quote_t -= dt
-        if self.quote_t <= 0 and self.quotes:
+        pool = self.quote_pool()
+        if self.quote_t <= 0 and pool:
             self.quote_t = self.run.rng.uniform(9, 15)
-            self.run.say(self.e, self.run.rng.choice(self.quotes), 2.4)
+            self.run.say(self.e, self.run.rng.choice(pool), 2.4)
 
     def modify_damage(self, dmg: float) -> float:
         if self.invuln > 0 or self.state == "intro":
@@ -359,6 +363,13 @@ class ZombieRooster(BossCtrl):
         if rl and len(bdef.lines) > 1:
             self.quotes = (bdef.lines[0], rl) + tuple(bdef.lines[2:])
         run.say(e, variant["quote"], 3.0)
+
+    def quote_pool(self) -> tuple:
+        # quotes = (kokrhání, hláška fáze 2, hláška fáze 3, obecná…) – fázové hlášky jen ve své fázi (B-76)
+        q = self.quotes
+        if len(q) < 3:
+            return q
+        return (q[0], q[self.phase - 1]) + tuple(q[3:]) if self.phase > 1 else (q[0],) + tuple(q[3:])
 
     def modify_damage(self, dmg: float) -> float:
         d = super().modify_damage(dmg)
