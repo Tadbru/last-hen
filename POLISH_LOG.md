@@ -76,3 +76,4 @@
 ## Round 6 (user feedback)
 - Menu stars redone: three kinds on the 3 px grid. Dim tiny dots, bright pixel stars in three tones (white, warm, cold), and a few larger cross-shaped sparkle stars whose arms slowly grow and shrink. Denser field from a private RNG (the global `random` stream is unchanged), none over the hills, the moon or the currency row.
 - Chest rays no longer rotate: on opening they shoot out once in all directions (same look as before), shine briefly and fade.
+- Round 7: the crow button shows the hen's head in colour while charging too (it used to be a grey outline).

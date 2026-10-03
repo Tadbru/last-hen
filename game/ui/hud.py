@@ -179,7 +179,7 @@ def _crow_button(surf, run, t: float) -> None:
     if ch > 0 and not ready:
         rect = pygame.Rect(cx - r + 4, cy - r + 4, (r - 4) * 2, (r - 4) * 2)
         pygame.draw.arc(surf, (255, 200, 80), rect, math.pi / 2, math.pi / 2 + math.tau * ch, 6)
-    icon = assets.icons.get("crow", 5 if ready else 4, gray=not ready)
+    icon = assets.icons.get("crow", 5 if ready else 4)      # barevná i během nabíjení (dřív šedý obrys)
     surf.blit(icon, icon.get_rect(center=(cx, cy - 2)))
     if ready:
         assets.font.draw(surf, "KOKRHEJ!", (cx, cy + r + 2), (255, 230, 120), 2, "midtop", outline=C_OUTLINE)
