@@ -17,7 +17,7 @@ def next_id() -> int:
 
 class Enemy:
     __slots__ = ("d", "id", "x", "y", "kx", "ky", "hp", "max_hp", "speed", "dmg", "r", "xp", "alive",
-                 "flash", "slow_t", "slow_f", "stun_t", "hyp_t", "freeze_t", "anim", "face", "armor",
+                 "flash", "flash_cd", "slow_t", "slow_f", "stun_t", "hyp_t", "freeze_t", "anim", "face", "armor",
                  "ctrl", "elite", "boss", "prop", "flyer", "touch_cd", "t", "cd", "state", "spr", "kb_res",
                  "ai", "tint", "alpha", "cell", "bob", "summoned", "fuse", "hx", "hy", "rage", "chest")
 
@@ -36,6 +36,7 @@ class Enemy:
         self.xp = d.xp
         self.alive = True
         self.flash = 0.0
+        self.flash_cd = 0.0     # rozestup bílých bliknutí bosse/elity (B-69)
         self.slow_t = 0.0
         self.slow_f = 0.0
         self.stun_t = 0.0

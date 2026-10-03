@@ -483,6 +483,7 @@ class ParticleSystem:
                 VY[i] = VY[i] * drag_h - 14 * dt
                 X[i] += VX[i] * dt
             elif k == GLOW or k == POP:
+                keep.append(i)          # stojí na místě, ale žijí do konce life (jinak slot vypadl z poolu, B-67)
                 continue
             else:
                 VX[i] *= drag_s

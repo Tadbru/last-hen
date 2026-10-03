@@ -30,6 +30,8 @@ def update_enemies(run, dt: float) -> None:
         e.t += dt
         if e.flash > 0:
             e.flash -= dt
+        if e.flash_cd > 0:
+            e.flash_cd -= dt
         if e.ctrl is not None:
             e.ctrl.update(dt)
             continue

@@ -45,6 +45,8 @@ XP_STEEP = 0.12
 RUSH_BOSS_LEVELS = 4        # kolik úrovní XP vysype boss v boss rushi
 GIANT_K = 4 / 3             # zvětšení obrů
 PAUSE_GAP = 8.0             # min. herní čas mezi dvěma přerušeními (level-upy se mezitím spojí do jedné obrazovky)
+BIG_FLASH = 0.07            # bílé bliknutí bosse/elity při zásahu (s)
+BIG_FLASH_GAP = 0.35        # …nejvýš jednou za tuto dobu → při trvalé palbě bílý max. ~20 % času (B-69)
 
 @dataclass
 class RunConfig:
@@ -522,6 +524,13 @@ class Run:
             if not flash:
                 if not self.headless and self.particles.rng.random() < 0.35:
                     self.particles.sparkle(e.x, e.y - e.r, src.d.color if src is not None else (200, 255, 150), 1)
+            elif e.boss or e.elite:
+                # bossové a elity blikají nejvýš 1× za BIG_FLASH_GAP – při rychlé palbě byli dřív trvale bílí (B-69)
+                if e.flash_cd <= 0:
+                    if not self.headless:
+                        self.particles.hit(e.x, e.y - e.r * 0.6, kx, ky, (255, 230, 150) if is_crit else (255, 250, 225))
+                    e.flash = BIG_FLASH
+                    e.flash_cd = BIG_FLASH_GAP
             else:
                 if e.flash <= 0 and not self.headless:
                     self.particles.hit(e.x, e.y - e.r * 0.6, kx, ky, (255, 230, 150) if is_crit else (255, 250, 225))
@@ -927,6 +936,8 @@ class Run:
     # HLAVNÍ UPDATE
     # =====================================================================================
     def update(self, dt: float, mx: float = 0.0, my: float = 0.0, crow: bool = False) -> None:
+        # záblesk dobíhá v každém stavu – dřív zamrzl ve vítězné animaci, pauze a pod bednou (B-68)
+        self.flash_t = max(0.0, self.flash_t - dt)
         if self.state in ("levelup", "chest", "dead", "victory", "paused"):
             return
         if self.state == "dying":
@@ -955,7 +966,6 @@ class Run:
 
         self.tick += 1
         self.time += dt
-        self.flash_t = max(0.0, self.flash_t - real_dt)
         self.flash_cd = max(0.0, self.flash_cd - real_dt)
         if crow:
             self.crow()
