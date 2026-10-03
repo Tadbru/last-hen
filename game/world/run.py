@@ -404,6 +404,8 @@ class Run:
         e.state = bid
         self.enemies.append(e)
         self.bosses.append(ctrl)
+        self.particles.smoke(x, y, 12, (60, 50, 66), 30, 5, 50, 1.3)
+        self.particles.pop_ring(x, y, 90, (255, 120, 90), 0.45)
         if final:
             self.final_boss = ctrl
             self.banner(ctrl.name, (255, 80, 80), 3.0)
@@ -432,6 +434,7 @@ class Run:
             self.bosses.remove(ctrl)
         self.explosion(e.x, e.y, 120, 0, None, (255, 220, 120), big=True)
         self.particles.feathers(e.x, e.y, 40, (255, 240, 220), 300)
+        self.particles.burst_ring(e.x, e.y - 20, 16, (255, 230, 140), 280)
         self.flash((255, 255, 255), 0.15, important=True)
         self.shake(0.8)
         self.camera.vibrate(16)
@@ -507,12 +510,15 @@ class Run:
             if e.armor <= 0:
                 self.sfx("helmet", 0.5)
                 self.particles.sparks(e.x, e.y - 12, 6, (220, 225, 240), 150)
+                self.particles.glow(e.x, e.y - 12, 18, (200, 210, 240), 0.1)
                 if e.d.id == "armored_fox":
                     e.spr = assets.sprites.enemies["armored_fox_broken"]
         if e.ctrl is not None:
             dmg = e.ctrl.modify_damage(dmg)
         if dmg > 0:
             e.hp -= dmg
+            if e.flash <= 0 and not self.headless:
+                self.particles.hit(e.x, e.y - e.r * 0.6, kx, ky, (255, 230, 150) if is_crit else (255, 250, 225))
             e.flash = 0.09
             if src is not None:
                 src.damage_dealt += dmg
@@ -592,10 +598,12 @@ class Run:
                                (255, 120, 40), True])
         if not e.summoned:
             self.corpses.append((e.x, e.y))
-        n = 4 if len(self.particles) < 450 else 1
-        self.particles.feathers(e.x, e.y - 8, n, e.d.fluff, 110)
+        self.particles.pop(e.x, e.y - 8, e.d.fluff, 4 if len(self.particles) < 450 else 1)
         if e.elite:
             self.particles.feathers(e.x, e.y, 20, e.d.fluff, 220)
+            self.particles.glow(e.x, e.y - 10, 44, (255, 220, 160), 0.14)
+            self.particles.smoke(e.x, e.y, 6, (70, 60, 66), 14, 4)
+            self.particles.pop_ring(e.x, e.y - 8, 46, (255, 230, 170), 0.3)
             self.shake(0.3)
         self.sfx("plop", 0.5)
         if self.kills % 3 == 0:
@@ -630,11 +638,7 @@ class Run:
             if (p.x - x) ** 2 + (p.y - y) ** 2 < (r + p.r) ** 2:
                 p.take_damage(hurt_player, x, y, "výbuch")
         self.add_ring(x, y, r * 0.3, r, 0.28 if not big else 0.5, color, 6 if not big else 12)
-        n = 8 if not big else 26
-        if len(self.particles) > 500:
-            n //= 3
-        self.particles.sparks(x, y, n, color, 260 if not big else 420)
-        self.particles.puff(x, y, n // 2, (90, 80, 80) if not big else (120, 100, 90), 70, 12)
+        self.particles.explosion(x, y, r, color, big)
         self.sfx("nuke" if big else "explode", 0.7 if not big else 1.0)
         if src is not None:
             # výbuch vlastní zbraně: jen jemné cuknutí, žádná vibrace
@@ -815,6 +819,8 @@ class Run:
         if k == P_XP:
             self.gain_xp(pk.value)
             self.sfx("pickup", 0.5)
+            if pk.value >= 3 or self.particles.rng.random() < 0.25:
+                self.particles.sparkle(p.x, p.y - 12, (150, 230, 255), 1 if pk.value < 15 else 3)
         elif k == P_GOLDEGG:
             self.gain_xp(pk.value)
             self.sfx("gold", 0.7)
@@ -822,6 +828,8 @@ class Run:
         elif k == P_WORM:
             p.heal(p.stats.max_hp * 0.3)
             self.add_text(p.x, p.y - 40, "+zdraví", (120, 255, 120), 2, 0.9)
+            self.particles.sparkle(p.x, p.y - 12, (130, 255, 140), 6)
+            self.particles.glow(p.x, p.y - 12, 30, (90, 200, 100), 0.2)
             self.sfx("heal")
         elif k == P_MAGNET:
             for q in self.pickups:
@@ -829,12 +837,15 @@ class Run:
                     q.attract = True
             self.sfx("gold")
             self.add_text(p.x, p.y - 40, "MAGNET!", (255, 120, 120), 2, 1.0)
+            self.particles.pop_ring(p.x, p.y - 10, 120, (255, 140, 140), 0.4)
         elif k == P_COIN:
             self.coins += int(pk.value)
             self.sfx("coin", 0.5)
+            self.particles.sparkle(p.x, p.y - 14, (255, 220, 90), 2)
         elif k == P_CHEST:
             self.pending_chests.append("boss" if pk.value >= 2 else "elite")
             self.sfx("chest")
+            self.particles.burst_ring(p.x, p.y - 14, 10, (255, 220, 110), 170)
 
     # =====================================================================================
     # KOKRHÁNÍ
@@ -870,6 +881,7 @@ class Run:
         self.shake(0.6)
         self.camera.vibrate(14)
         self.particles.stars(p.x, p.y - 20, 16, (255, 230, 90), 280)
+        self.particles.glow(p.x, p.y - 14, 60, (255, 210, 110), 0.25)
         self.add_text(p.x, p.y - 60, "KIKIRIKÍ!", (255, 230, 90), 4, 1.2)
         self.sfx("crow", 1.0)
         if self.final_boss is not None and isinstance(getattr(self.final_boss, "wind", None), float):
@@ -983,6 +995,10 @@ class Run:
         if self.tick % 30 == 0:
             self.allies = [a for a in self.allies if a.alive]
 
+        # hustota efektů podle davu (jen vizuál): čitelnost a výkon v pozdní hře
+        ne = len(self.enemies)
+        self.particles.density = 1.0 if ne < 80 else max(0.4, 1.0 - (ne - 80) / 450)
+
         # masakr → zpomalení
         self._burst.append(self._kills_tick)
         self._kills_tick = 0
@@ -1022,10 +1038,13 @@ class Run:
             p.heal(p.stats.max_hp * progression.HEAL_FILL * n)
             self.add_text(p.x, p.y - 46, f"Úr. {self.level}  +zdraví", (120, 255, 140), 2, 1.2)
             self.particles.stars(p.x, p.y - 20, 6, (120, 255, 140), 90)
+            self.particles.glow(p.x, p.y - 14, 34, (90, 200, 110), 0.2)
             self.sfx("heal", 0.6)
             return
         self.state = "levelup"
         self.offer = progression.make_offer(self)
+        self.particles.burst_ring(self.player.x, self.player.y - 16, 14, (255, 220, 90), 210)
+        self.particles.glow(self.player.x, self.player.y - 16, 54, (255, 210, 100), 0.3)
         self.sfx("levelup")
         self.camera.vibrate(6)
 
@@ -1058,6 +1077,8 @@ class Run:
         self.state_t = 1.4
         p = self.player
         self.particles.feathers(p.x, p.y, 40, (250, 248, 240), 260)
+        self.particles.glow(p.x, p.y - 12, 70, (255, 240, 220), 0.3)
+        self.particles.smoke(p.x, p.y, 8, (80, 72, 80), 14, 4, 40, 1.2)
         self.sfx("defeat")
         self.shake(0.7)
         self.camera.vibrate(16)

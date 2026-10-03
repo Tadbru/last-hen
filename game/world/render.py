@@ -10,12 +10,20 @@ from .. import assets
 from ..config import H, PX, W
 from ..device import fblits
 from ..gfx import pixelart as pa
+from ..gfx.particles import blit_add, glow_sprite
 from ..gfx.sprites import angle_index
 from ..gfx.tiles import TILE
-from ..util import clamp, lerp_color
+from ..util import clamp, lerp_color, mul_color
 from .entities import M_BOOMERANG, M_LOB, M_SPIRAL, M_WAVE, P_CHEST, P_COIN, P_GOLDEGG, P_MAGNET, P_WORM, P_XP
 
 FAST_MULT = hasattr(pygame.Surface, "fblits")     # pygame-ce má SIMD blend; klasický pygame ne
+
+# prach pod nohama podle biomu
+DUST_COL = {"farm": (138, 116, 84), "forest": (92, 78, 60), "city": (150, 150, 158), "mountain": (240, 244, 252),
+            "factory": (120, 118, 126)}
+# záře nepřátelských projektilů (čitelnost v davu): sliz, peří kohouta, mrkev
+EPROJ_GLOW = {0: (110, 255, 60), 1: (255, 240, 220), 2: (255, 140, 40)}
+PICKUP_GLOW = {P_GOLDEGG: (255, 200, 60), P_CHEST: (255, 210, 110), P_MAGNET: (255, 90, 90), P_WORM: (120, 240, 120)}
 
 # kotvy klobouků skinů (art px relativně k levému hornímu rohu spritu bez obrysu): (střed x, horní y)
 HAT_ANCHOR = {"hen": (10.5, 1.5), "duck": (9.0, 2.0), "goose": (11.0, 0.5), "turkey": (11.5, 1.5),
@@ -46,6 +54,9 @@ class RunRenderer:
         if run.cfg.season:
             from ..data.meta import SEASONS
             self.season_tint = SEASONS[run.cfg.season]["tint"]
+        self.edges = self._make_edges()
+        self._dust_t = 0.0
+        self._amb = _Ambient(run.biome.id)
 
     # --- pomocné povrchy -----------------------------------------------------------------------
     def _make_fog(self) -> pygame.Surface:
@@ -58,6 +69,26 @@ class RunRenderer:
             pygame.draw.circle(s, (10, 16, 22, a), (cx, cy), r)
         pygame.draw.circle(s, (0, 0, 0, 0), (cx, cy), 150)
         return s
+
+    def _make_edges(self) -> list:
+        """Jemná trvalá vinětace jen v okrajových pruzích (levnější než celoplošná vrstva – Android).
+        Pixelové pásy po 3 px, ať sedí k pixel artu."""
+        col = (14, 8, 20)
+        out = []
+        th, sw = 72, 54
+        top = pygame.Surface((W, th), pygame.SRCALPHA)
+        for y in range(0, th, 3):
+            a = int(110 * (1 - y / th) ** 2)
+            top.fill((*col, a), (0, y, W, 3))
+        out.append((top, (0, 0)))
+        out.append((pygame.transform.flip(top, False, True), (0, H - th)))
+        side = pygame.Surface((sw, H), pygame.SRCALPHA)
+        for x in range(0, sw, 3):
+            a = int(80 * (1 - x / sw) ** 2)
+            side.fill((*col, a), (x, 0, 3, H))
+        out.append((side, (0, 0)))
+        out.append((pygame.transform.flip(side, True, False), (W - sw, 0)))
+        return out
 
     def _make_vignette(self, col) -> pygame.Surface:
         s = pygame.Surface((W, H), pygame.SRCALPHA)
@@ -111,8 +142,11 @@ class RunRenderer:
         self.t += min(0.1, now - last) if last is not None else 0.0
         cam = run.camera
         ox, oy = cam.ox, cam.oy
+        dt_real = self.t - getattr(self, "_t_prev", self.t)
+        self._t_prev = self.t
         self._ground(surf, ox, oy)
         self._zones(surf, ox, oy)
+        run.particles.draw_decals(surf, ox, oy)
         if run.arena is not None:
             self._arena(surf, ox, oy, back=True)
         self._telegraphs(surf, ox, oy, ground=True)
@@ -129,7 +163,13 @@ class RunRenderer:
         self._canopies(surf, ox, oy)
         if run.arena is not None:
             self._arena(surf, ox, oy, back=False)
+        self._footsteps(dt_real)
+        self._amb.update(dt_real, run)
+        self._amb.draw(surf, ox, oy, run, lit=False)
         self._lighting(surf)
+        self._amb.draw(surf, ox, oy, run, lit=True)
+        for img, pos in self.edges:
+            surf.blit(img, pos)
         self._texts(surf, ox, oy)
         self._speech(surf, ox, oy)
         if run.flash_t > 0:
@@ -286,12 +326,17 @@ class RunRenderer:
         sm = assets.sprites.small
         xp1, xp2, xp3 = sm["xp1"], sm["xp2"], sm["xp3"]
         blits = []
+        glows = []
         t = self.t
         for pk in self.run.pickups:
             x, y = pk.x - ox, pk.y - oy
             if x < -20 or x > W + 20 or y < -30 or y > H + 20:
                 continue
             k = pk.kind
+            gc = PICKUP_GLOW.get(k)
+            if gc is not None:
+                g = glow_sprite(5, gc, 0.55 + 0.25 * math.sin(t * 4 + pk.x * 0.05))
+                glows.append((g, (x - g.get_width() / 2, y - 12 - pk.z - g.get_height() / 2)))
             if k == P_XP:
                 v = pk.value
                 img = xp1 if v < 3 else xp2 if v < 15 else xp3
@@ -308,8 +353,7 @@ class RunRenderer:
                 blits.append((self.shadow_small, (x - 15, y - 3)))
             bob = math.sin(t * 5 + pk.x * 0.1) * 2 if k != P_XP else 0
             blits.append((img, (x - img.get_width() / 2, y - img.get_height() - pk.z + bob)))
-            if k == P_CHEST and int(t * 4) % 2:
-                blits.append((self.circle(20, (255, 230, 120), 50), (x - 21, y - 32)))
+        blit_add(surf, glows)
         if blits:
             fblits(surf, blits)
 
@@ -482,7 +526,18 @@ class RunRenderer:
     def _projs(self, surf, ox, oy) -> None:
         blits = []
         sm = assets.sprites.small
-        for pr in self.run.projs:
+        projs = self.run.projs
+        if len(projs) < 160:
+            glows = []
+            for pr in projs:
+                if pr.motion in (M_LOB, M_WAVE) or pr.src is None:
+                    continue
+                x, y = pr.x - ox, pr.y - oy
+                if -20 < x < W + 20 and -20 < y < H + 20:
+                    g = glow_sprite(3, pr.src.d.color, 0.45)
+                    glows.append((g, (x - 10, y - 10)))
+            blit_add(surf, glows)
+        for pr in projs:
             x, y = pr.x - ox, pr.y - oy
             if x < -40 or x > W + 40 or y < -60 or y > H + 40:
                 continue
@@ -520,6 +575,15 @@ class RunRenderer:
             fblits(surf, blits)
 
     def _eprojs(self, surf, ox, oy) -> None:
+        glows = []
+        pulse = 0.75 + 0.25 * math.sin(self.t * 14)
+        for ep in self.run.eprojs:
+            x, y = ep.x - ox, ep.y - oy
+            if x < -30 or x > W + 30 or y < -30 or y > H + 30:
+                continue
+            g = glow_sprite(4, EPROJ_GLOW.get(ep.kind, (255, 120, 120)), pulse)
+            glows.append((g, (x - g.get_width() / 2, y - g.get_height() / 2)))
+        blit_add(surf, glows)
         for ep in self.run.eprojs:
             x, y = ep.x - ox, ep.y - oy
             if x < -30 or x > W + 30 or y < -30 or y > H + 30:
@@ -541,7 +605,10 @@ class RunRenderer:
             k = 1 - r.life / r.maxlife
             rad = r.r0 + (r.r1 - r.r0) * (1 - (1 - k) ** 2)
             width = max(1, int(r.width * (1 - k)))
-            pygame.draw.circle(surf, r.color, (int(r.x - ox), int(r.y - oy)), int(rad), width)
+            c = (int(r.x - ox), int(r.y - oy))
+            pygame.draw.circle(surf, r.color, c, int(rad), width)
+            if k < 0.35 and rad > 8:
+                pygame.draw.circle(surf, (255, 255, 240), c, int(rad - width / 2), max(1, width // 3))
 
     def _beams(self, surf, ox, oy) -> None:
         for b in self.run.beams:
@@ -638,6 +705,17 @@ class RunRenderer:
             y = p.y - run.camera.oy - H
             surf.blit(self.fog, (x, y))
 
+    def _footsteps(self, dt: float) -> None:
+        """Prach pod nohama při chůzi (jen vizuál, vlastní RNG částic)."""
+        run = self.run
+        p = run.player
+        if run.state != "playing" or p.dead or not p.moving:
+            return
+        self._dust_t -= dt
+        if self._dust_t <= 0:
+            self._dust_t = 0.16
+            run.particles.dust(p.x - p.vx * 0.04, p.y + 7, DUST_COL.get(run.biome.id, (140, 120, 90)))
+
     def _texts(self, surf, ox, oy) -> None:
         font = assets.font
         for t in self.run.texts:
@@ -668,3 +746,79 @@ class RunRenderer:
 
 def _sort_key(it):
     return it[0]
+
+
+class _Ambient:
+    """Ambientní život biomu: světlušky (farma), listí (les), prach (město), sníh (hory), jiskry (továrna).
+    Souřadnice ve světě zabalené kolem kamery – při pohybu se posouvají s mapou (žádná „špína na čočce“)."""
+    SPAN_X, SPAN_Y = W + 60, H + 60
+
+    def __init__(self, biome: str) -> None:
+        import random as _r
+        rng = _r.Random(11)
+        self.biome = biome
+        spec = {"farm": [("fly", 14)], "forest": [("leaf", 16), ("fly", 6)], "city": [("mote", 18)],
+                "mountain": [("snow", 34)], "factory": [("ember", 16), ("mote", 8)]}.get(biome, [("mote", 10)])
+        self.items = []
+        for kind, n in spec:
+            for _ in range(n):
+                self.items.append([rng.uniform(0, self.SPAN_X), rng.uniform(0, self.SPAN_Y),
+                                   rng.uniform(0, math.tau), kind, rng.uniform(0.6, 1.3)])
+        self.t = 0.0
+        self.leaf_cols = [(214, 140, 50), (186, 92, 40), (120, 160, 60)]
+
+    def update(self, dt: float, run) -> None:
+        if run.state not in ("playing", "victory_anim", "dying"):
+            return
+        self.t += dt
+        for it in self.items:
+            kind, sp = it[3], it[4]
+            if kind == "snow":
+                it[1] += 46 * sp * dt
+                it[0] += math.sin(self.t * 1.3 + it[2]) * 18 * dt
+            elif kind == "leaf":
+                it[1] += 30 * sp * dt
+                it[0] += (math.sin(self.t * 1.7 + it[2]) * 40 + 12) * dt
+            elif kind == "ember":
+                it[1] -= 34 * sp * dt
+                it[0] += math.sin(self.t * 2 + it[2]) * 14 * dt
+            elif kind == "fly":
+                it[0] += math.cos(self.t * 0.7 * sp + it[2]) * 22 * dt
+                it[1] += math.sin(self.t * 0.9 * sp + it[2] * 1.3) * 16 * dt
+            else:
+                it[0] += 8 * sp * dt
+                it[1] += math.sin(self.t * 0.5 + it[2]) * 5 * dt
+
+    def draw(self, surf, ox: float, oy: float, run, lit: bool) -> None:
+        sx_span, sy_span = self.SPAN_X, self.SPAN_Y
+        ft = run.final_time or 600
+        night = 0.15 if run.victory else 1.0 - clamp(run.time / ft, 0, 1) * 0.85
+        adds = []
+        for x, y, ph, kind, sp in self.items:
+            glowy = kind in ("fly", "ember")
+            if glowy != lit:
+                continue
+            par = 1.0 + (sp - 1.0) * 0.4
+            px = int((x - ox * par) % sx_span) - 30
+            py = int((y - oy * par) % sy_span) - 30
+            if kind == "snow":
+                s = 3 if sp > 0.95 else 2
+                surf.fill((246, 250, 255), (px // 3 * 3, py // 3 * 3, s, s))
+            elif kind == "leaf":
+                c = self.leaf_cols[int(ph * 3) % 3]
+                flip = int(self.t * 3 + ph * 5) & 1
+                surf.fill(c, (px, py, 6 if flip else 3, 3 if flip else 6))
+                surf.fill(mul_color(c, 0.7), (px, py + 3, 3, 3))
+            elif kind == "mote":
+                surf.fill((200, 200, 205), (px // 3 * 3, py // 3 * 3, 3, 3))
+            elif kind == "fly":
+                b = 0.5 + 0.5 * math.sin(self.t * 2.4 * sp + ph * 4)
+                k = b * night
+                if k > 0.12:
+                    g = glow_sprite(3, (190, 255, 110), k)
+                    adds.append((g, (px - 10, py - 10)))
+            elif kind == "ember":
+                k = 0.5 + 0.5 * math.sin(self.t * 5 + ph * 3)
+                g = glow_sprite(2, (255, 150, 50), 0.4 + 0.6 * k)
+                adds.append((g, (px - 7, py - 7)))
+        blit_add(surf, adds)

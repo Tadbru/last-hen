@@ -210,6 +210,7 @@ class Player:
         run.dmg_log[src] = run.dmg_log.get(src, 0.0) + dmg
         run.sfx("cluck_hurt", 0.8)
         run.particles.feathers(self.x, self.y - 10, 6, (250, 248, 240), 140)
+        run.particles.glow(self.x, self.y - 12, 30, (255, 80, 70), 0.14)
         run.shake(0.28)
         run.camera.haptic(30)
         if sx is not None:
