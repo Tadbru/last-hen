@@ -411,9 +411,7 @@ class CakeWeapon(Weapon):
             seen.add(e.id)
 
             def land(tel, r=r, dmg=dmg, big=big):
-                run.explosion(tel.x, tel.y, r, dmg, self, (255, 200, 220), kb=240, big=big)
-                run.particles.blobs(tel.x, tel.y, 10, (255, 240, 245), 200)
-                run.particles.blobs(tel.x, tel.y, 6, (255, 160, 190), 180)
+                run.explosion(tel.x, tel.y, r, dmg, self, (255, 200, 220), kb=240, big=big, fx="cream")
                 if s.get("cream"):
                     run.add_area(tel.x, tel.y, r * 0.8, dmg * 0.08, 0.5, 3.0, "cream", self, slow=0.5,
                                  color=(255, 245, 230))

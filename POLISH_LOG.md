@@ -41,3 +41,11 @@
 - Speech bubbles use the same notched pixel frame as panels.
 - Menu fireflies and twinkles use a private `random.Random(21)` so the global random stream (which seeds runs) matches the original exactly.
 - Store: `tools/make_store_assets.py` → `store/` (icon 512, feature graphic 1024×500 drawn at 512×250 and scaled 2× nearest, 5 captioned screenshots 1080×1920 with the game at 1.6×). Scripted kills there hide damage numbers so no "1000000000" appears.
+
+## Round 2 (user feedback)
+- Fireflies were distracting → removed from the menu and from the game. Farm now has no ambient particles; the forest keeps only leaves.
+- "Cakes make big pink blotches": the root cause was not the particles. The cream area and the stink cloud hit everyone inside every 0.4–0.5 s, so the whole crowd flashed white at once (pink under the night lighting). Added visual-only `flash=False` for area ticks (`_update_areas`): no white flash and no flood of numbers, instead an occasional small sparkle in the weapon's colour. `run.rng` is still consumed identically (gameplay determinism checked).
+- Cake: telegraph = growing shadow + dotted ring instead of pink filled discs. Landing = cream splat (cream blobs, sprinkles, white ring, small cream decal) instead of a pink fireball (`explosion(fx="cream")`, damage unchanged). The cream area = scattered pixel cream dollops with sprinkles instead of one giant ellipse.
+- Stink: pixel gas cloud of 7 slowly rotating, breathing lobes (dark rim, dithered fill) under entities. Above entities: bubbles + comic stink lines (bright, with a shadow). The Bioweapon aura = a ring of darker gas lobes instead of a translucent green disc.
+- Menu foxes: the walk frame was changing with every pixel moved (frame index used the x position) → now time-based at about 3–4 steps/s.
+- Menu landscape redrawn at 180×320 art px: dithered sky, far hills with pine silhouettes, a middle hill with the coop, scarecrow and barn (night-tinted game sprites), and a meadow running continuously to the bottom with grass tufts, flowers and blades breaking the edge. No seam. Plus the game's fence and hay bales. The store feature graphic now uses the same landscape.

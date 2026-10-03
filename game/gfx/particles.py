@@ -152,6 +152,83 @@ class _SpriteCache:
         pygame.draw.circle(s, (*col, 255), (r + 1, r + 1), r, width)
         return self._put(key, s)
 
+    def gas(self, r: int, col, a: int) -> pygame.Surface:
+        """Chuchvalec plynu: tmavší okraj, ditherovaný vnitřek, světlejší vršek (pixel art, r v art px)."""
+        key = ("gas", r, col, a)
+        s = self.d.get(key)
+        if s is not None:
+            return s
+        n = r * 2 + 1
+        low = pygame.Surface((n, n), pygame.SRCALPHA)
+        rim, dark, light = _mul(col, 0.62), _mul(col, 0.84), _mix(col, (255, 255, 230), 0.3)
+        lim = r * r + r * 0.8
+        inner = (r - 1) * (r - 1) + (r - 1) * 0.8
+        for i, j in _disc_cells(r):
+            d = i * i + j * j
+            if d > inner and r >= 2:
+                c, aa = rim, a
+            elif j < -r * 0.35 and i < r * 0.3 and d < lim * 0.45:
+                c, aa = light, a
+            else:
+                c, aa = (col if (i + j) & 1 else dark), a
+            low.set_at((i + r, j + r), (*c, aa))
+        s = pygame.transform.scale(low, (n * G, n * G))
+        return self._put(key, s)
+
+    def cream(self, r: int, seed: int) -> pygame.Surface:
+        """Kaňka šlehačky: nepravidelný obrys z několika kruhů, stín dole, obrys a růžový posyp."""
+        key = ("cr", r, seed)
+        s = self.d.get(key)
+        if s is not None:
+            return s
+        rng = random.Random(seed * 7919 + r)
+        ry = max(2, int(r * 0.62))
+        w, h = r * 2 + 5, ry * 2 + 5
+        grid = [[False] * w for _ in range(h)]
+        blobs = [(0.0, 0.0, 1.0)] + [(rng.uniform(-0.55, 0.55), rng.uniform(-0.45, 0.45), rng.uniform(0.35, 0.55))
+                                      for _ in range(5)]
+        for bx, by, br in blobs:
+            cx, cy, rr = w / 2 + bx * r, h / 2 + by * ry, br
+            for y in range(h):
+                for x in range(w):
+                    if ((x + 0.5 - cx) / (r * rr + 0.5)) ** 2 + ((y + 0.5 - cy) / (ry * rr + 0.5)) ** 2 <= 0.62:
+                        grid[y][x] = True
+        low = pygame.Surface((w, h), pygame.SRCALPHA)
+        base, shade, hi, edge = (252, 244, 230), (226, 206, 194), (255, 255, 250), (176, 136, 128)
+        for y in range(h):
+            for x in range(w):
+                if not grid[y][x]:
+                    if any(0 <= y + dy < h and 0 <= x + dx < w and grid[y + dy][x + dx]
+                           for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                        low.set_at((x, y), (*edge, 255))
+                    continue
+                below = y + 1 >= h or not grid[y + 1][x]
+                above = y - 1 < 0 or not grid[y - 1][x]
+                c = shade if below else hi if above else base
+                low.set_at((x, y), (*c, 255))
+        sprinkles = [(255, 120, 160), (120, 200, 255), (255, 214, 70), (150, 230, 120)]
+        for _ in range(max(2, r)):
+            x, y = rng.randrange(w), rng.randrange(h)
+            if grid[y][x] and (y + 1 < h and grid[y + 1][x]):
+                low.set_at((x, y), (*rng.choice(sprinkles), 255))
+        s = pygame.transform.scale(low, (w * G, h * G))
+        return self._put(key, s)
+
+    def stink_line(self, col, a: int) -> pygame.Surface:
+        """Komiksová „smradlavá čárka“ – klikatá svislá linka (3×9 art px)."""
+        key = ("sl", col, a)
+        s = self.d.get(key)
+        if s is not None:
+            return s
+        rows = ["#..", ".#.", "..#", ".#.", "#..", ".#.", "..#", ".#.", "#.."]
+        low = pygame.Surface((3, len(rows)), pygame.SRCALPHA)
+        for y, row in enumerate(rows):
+            for x, ch in enumerate(row):
+                if ch == "#":
+                    low.set_at((x, y), (*col, a))
+        s = pygame.transform.scale(low, (3 * G, len(rows) * G))
+        return self._put(key, s)
+
     def scorch(self, r: int, a: int) -> pygame.Surface:
         key = ("x", r, a)
         s = self.d.get(key)
@@ -195,7 +272,7 @@ class ParticleSystem:
         self.free = list(range(n - 1, -1, -1))
         self.rng = random.Random(7)
         self.density = 1.0          # 1 = plné efekty; při davu nepřátel Run snižuje (čitelnost + výkon)
-        self.decals: list[list] = []   # [x, y, r, life, maxlife] – spáleniště pod entitami
+        self.decals: list[list] = []   # [x, y, r, life, maxlife, druh] – spáleniště / šlehačka pod entitami
 
     def clear(self) -> None:
         self.alive.clear()
@@ -352,10 +429,26 @@ class ParticleSystem:
             a = i * math.tau / n
             self.emit(x, y, math.cos(a) * speed, math.sin(a) * speed * 0.8 - 40, 0.55, STAR, col, 3)
 
-    def scorch(self, x: float, y: float, r: float, life: float = 4.0) -> None:
+    def scorch(self, x: float, y: float, r: float, life: float = 4.0, kind: int = 0) -> None:
         if len(self.decals) >= MAX_DECALS:
             self.decals.pop(0)
-        self.decals.append([x, y, max(2, min(9, int(r / G))), life, life])
+        self.decals.append([x, y, max(2, min(9 if kind == 0 else 14, int(r / G))), life, life, kind])
+
+    def splat(self, x: float, y: float, rad: float) -> None:
+        """Dopad dortu: šlehačkové cákance, posyp, bílý kruh a kaňka na zemi – žádný oheň ani kouř."""
+        r = self.rng
+        self.pop_ring(x, y, rad * 0.9, (255, 250, 240), 0.22)
+        for _ in range(self._n(10)):
+            a = r.uniform(0, math.tau)
+            sp = r.uniform(80, 220) * min(1.6, rad / 70)
+            self.emit(x, y - 6, math.cos(a) * sp, math.sin(a) * sp * 0.7 - 120, r.uniform(0.35, 0.6), BLOB,
+                      r.choice(((252, 244, 230), (255, 255, 250), (250, 200, 210))), 4)
+        for _ in range(self._n(8)):
+            a = r.uniform(0, math.tau)
+            sp = r.uniform(60, 200)
+            self.emit(x, y - 6, math.cos(a) * sp, math.sin(a) * sp - 140, r.uniform(0.4, 0.7), DEBRIS,
+                      r.choice(((255, 120, 160), (120, 200, 255), (255, 214, 70), (150, 230, 120))), 3)
+        self.scorch(x, y, min(rad * 0.3, 18), 2.5, 1)
 
     # --- update/draw --------------------------------------------------------------------------
     def update(self, dt: float) -> None:
@@ -410,9 +503,14 @@ class ParticleSystem:
             return
         w, h = surf.get_size()
         seq = []
-        for x, y, r, life, maxl in self.decals:
+        for x, y, r, life, maxl, kind in self.decals:
             k = min(1.0, life / (maxl * 0.5))
-            s = _cache.scorch(r, int(110 * k) // 10 * 10)
+            if kind == 1:
+                if k < 1.0 and int(life * 12) & 1:      # šlehačka mizí „poblikáváním“ (pixel styl, bez alfy)
+                    continue
+                s = _cache.cream(r, int(x + y) & 3)
+            else:
+                s = _cache.scorch(r, int(110 * k) // 10 * 10)
             sx = x - ox - s.get_width() / 2
             sy = y - oy - s.get_height() / 2
             if -60 < sx < w + 10 and -40 < sy < h + 10:
@@ -515,6 +613,18 @@ def glow_sprite(r: int, col, k: float = 1.0) -> pygame.Surface:
 
 def disc_sprite(r: int, col, a: int = 255, shade: bool = True) -> pygame.Surface:
     return _cache.disc(r, col, a, shade)
+
+
+def gas_sprite(r: int, col, a: int) -> pygame.Surface:
+    return _cache.gas(r, col, a)
+
+
+def stink_line_sprite(col, a: int) -> pygame.Surface:
+    return _cache.stink_line(col, a)
+
+
+def cream_sprite(r: int, seed: int) -> pygame.Surface:
+    return _cache.cream(r, seed)
 
 
 def blit_add(surf, seq) -> None:

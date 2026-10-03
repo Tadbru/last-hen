@@ -10,7 +10,7 @@ from .. import assets
 from ..config import H, PX, W
 from ..device import fblits
 from ..gfx import pixelart as pa
-from ..gfx.particles import blit_add, glow_sprite
+from ..gfx.particles import blit_add, cream_sprite, gas_sprite, glow_sprite, stink_line_sprite
 from ..gfx.sprites import angle_index
 from ..gfx.tiles import TILE
 from ..ui.widgets import notched_rect
@@ -161,6 +161,7 @@ class RunRenderer:
         self._waves_rings(surf, ox, oy)
         self._beams(surf, ox, oy)
         self._bombs(surf, ox, oy)
+        self._gas(surf, ox, oy)
         self._telegraphs(surf, ox, oy, ground=False)
         run.particles.draw(surf, ox, oy)
         self._canopies(surf, ox, oy)
@@ -247,7 +248,9 @@ class RunRenderer:
             x, y = t.x - ox, t.y - oy
             if ground:
                 pulse = 0.5 + 0.5 * math.sin(self.t * 18)
-                if t.kind in ("circle", "stamper", "cake", "drop"):
+                if t.kind == "cake":
+                    self._cake_tel(surf, t, x, y, k)
+                elif t.kind in ("circle", "stamper", "drop"):
                     r = t.r
                     a = int(60 + 60 * k)
                     s = self.circle(r, t.color, a)
@@ -284,6 +287,19 @@ class RunRenderer:
                     pygame.draw.rect(surf, (60, 60, 70), (x - t.r * 0.8, y - h - 70, t.r * 1.6, 60), 3)
                     pygame.draw.rect(surf, (230, 190, 40), (x - t.r * 0.8, y - h - 18, t.r * 1.6, 8))
 
+    def _cake_tel(self, surf, t, x, y, k) -> None:
+        """Vlastní zbraň hráče – nenápadně: rostoucí stín padajícího dortu a tečkovaný kroužek dopadu."""
+        r = t.r
+        sw = r * (0.3 + 0.45 * k)
+        sh = self.ellipse(sw * 2, sw, (20, 10, 24), int(30 + 60 * k) // 10 * 10)
+        surf.blit(sh, (x - sh.get_width() / 2, y - sh.get_height() / 2))
+        n = 16
+        col = t.color
+        rot = self.t * 0.9
+        for i in range(n):
+            a = rot + i * math.tau / n
+            surf.fill(col, (int(x + math.cos(a) * r) // 3 * 3 - 3, int(y + math.sin(a) * r * 0.8) // 3 * 3 - 1, 6, 3))
+
     def _line_tel(self, surf, t, ox, oy, k) -> None:
         x1, y1, x2, y2 = t.x - ox, t.y - oy, t.x2 - ox, t.y2 - oy
         dx, dy = x2 - x1, y2 - y1
@@ -310,20 +326,104 @@ class RunRenderer:
                 continue
             fade = min(1.0, a.life / 0.4)
             if a.kind == "cloud":
-                s = self.circle(r, a.color, int(70 * fade))
-                surf.blit(s, (x - r - 1, y - r - 1))
-                for i in range(3):
-                    ang = self.t * 0.8 + i * 2.1 + a.x * 0.01
-                    rr = r * 0.55
-                    s2 = self.circle(rr, a.color, int(60 * fade))
-                    surf.blit(s2, (x + math.cos(ang) * r * 0.35 - rr - 1, y + math.sin(ang) * r * 0.25 - rr - 1))
+                self._gas_cloud(surf, a, x, y, r, fade)
             elif a.kind == "cream":
-                s = self.ellipse(r * 2, r * 1.3, (255, 245, 235), int(150 * fade))
-                surf.blit(s, (x - r, y - r * 0.65))
-            elif a.kind == "aura":
-                s = self.circle(r, a.color, 40)
-                surf.blit(s, (x - r - 1, y - r - 1))
-                pygame.draw.circle(surf, a.color, (int(x), int(y)), int(r), 2)
+                if a.life < 0.6 and int(a.life * 12) & 1:
+                    continue                        # mizí „poblikáváním“ (pixel styl)
+                self._cream(surf, a, x, y, r)
+
+    def _gas(self, surf, ox, oy) -> None:
+        """Plyn (mrak smradu, toxická aura) je ve vzduchu – kreslí se nad entitami."""
+        for a in self.run.areas:
+            if a.kind != "cloud" and a.kind != "aura":
+                continue
+            x, y = a.x - ox, a.y - oy
+            r = a.r
+            if x < -r or x > W + r or y < -r - 40 or y > H + r:
+                continue
+            if a.kind == "cloud":
+                self._gas_air(surf, a, x, y, r, min(1.0, a.life / 0.4))
+            else:
+                self._gas_aura(surf, a, x, y, r)
+
+    def _gas_cloud(self, surf, a, x, y, r, fade) -> None:
+        """Mrak smradu: 7 pixelových chuchvalců plynu, které se pomalu točí a „dýchají“, a stoupající bubliny."""
+        fade *= min(1.0, (a.maxlife - a.life) / 0.25)
+        al = int(120 * fade) // 30 * 30
+        if al < 30:
+            return
+        col = a.color
+        col2 = mul_color(col, 0.82)
+        seed = (int(a.x * 0.37) ^ int(a.y * 0.11)) % 97
+        rc = max(2, int(r * 0.42 / 3))
+        lobes = [(x, y, rc + 1, col2)]
+        for i in range(6):
+            ang = self.t * 0.35 + i * math.tau / 6 + seed
+            rr = r * 0.46 * (1 + 0.08 * math.sin(self.t * 2.1 + i * 1.7))
+            lobes.append((x + math.cos(ang) * rr, y + math.sin(ang) * rr * 0.72, rc, col if i & 1 else col2))
+        lobes.sort(key=lambda o: o[1])
+        seq = []
+        for lx, ly, lr, lc in lobes:
+            g = gas_sprite(lr, lc, al)
+            hw = g.get_width() // 2
+            seq.append((g, (int(lx) // 3 * 3 - hw, int(ly) // 3 * 3 - hw)))
+        fblits(surf, seq)
+
+    def _gas_air(self, surf, a, x, y, r, fade) -> None:
+        """Nad entitami: bubliny a komiksové smradlavé čárky (lišky v mraku zůstávají vidět)."""
+        fade *= min(1.0, (a.maxlife - a.life) / 0.25)
+        if fade < 0.2:
+            return
+        col = a.color
+        seed = (int(a.x * 0.37) ^ int(a.y * 0.11)) % 97
+        light = mul_color(col, 1.25)
+        for i in range(4):
+            ph = (self.t * 0.55 + i / 4 + seed * 0.13) % 1.0
+            if ph > 0.85:
+                continue
+            bx = x + math.sin(seed + i * 2.3) * r * 0.5
+            by = y + r * 0.3 - ph * r * 0.9
+            sz = 3 if i & 1 else 6
+            surf.fill(light, (int(bx) // 3 * 3, int(by) // 3 * 3, sz, sz))
+        # stoupající smradlavé čárky (čitelné na první pohled: tady to smrdí)
+        for i in range(3):
+            ph = (self.t * 0.7 + i / 3 + seed * 0.07) % 1.0
+            la = int(230 * min(1.0, (1 - ph) * 2.5) * fade) // 46 * 46
+            if la <= 0:
+                continue
+            lx = int(x + (i - 1) * r * 0.42 + math.sin(self.t * 2 + i) * 4) // 3 * 3 - 4
+            ly = int(y - r * 0.35 - ph * r * 0.8) // 3 * 3 - 13
+            surf.blit(stink_line_sprite((40, 60, 20), la), (lx + 3, ly + 3))
+            surf.blit(stink_line_sprite((214, 250, 120), la), (lx, ly))
+
+    def _cream(self, surf, a, x, y, r) -> None:
+        """Šlehačka: rozprsklé kopečky šlehačky s posypem po ploše zásahu (žádná jedna velká kaňka)."""
+        seed = (int(a.x * 0.53) ^ int(a.y * 0.29)) & 0xFFFF
+        n = max(5, int(r / 11))
+        seq = []
+        for i in range(n):
+            h = (seed * 2654435761 + i * 40503) & 0xFFFFFFFF
+            ang = (h & 0xFFFF) / 65536 * math.tau
+            d = math.sqrt(((h >> 16) & 0xFF) / 255) * r * 0.85
+            cs = cream_sprite(3 + (h >> 24) % 3, (h >> 8) & 3)
+            seq.append((cs, (int(x + math.cos(ang) * d - cs.get_width() / 2) // 3 * 3,
+                             int(y + math.sin(ang) * d * 0.7 - cs.get_height() / 2) // 3 * 3)))
+        fblits(surf, seq)
+
+    def _gas_aura(self, surf, a, x, y, r) -> None:
+        """Aura Biologické zbraně: toxický prstenec z malých chuchvalců kolem slepice (žádná plná skvrna)."""
+        col = mul_color(a.color, 0.72)
+        col2 = mul_color(a.color, 0.55)
+        n = max(16, int(r / 7))
+        seq = []
+        for i in range(n):
+            ang = self.t * 0.4 + i * math.tau / n
+            wob = 1 + 0.06 * math.sin(self.t * 3 + i * 1.3)
+            g = gas_sprite(2 + (i % 3 == 0), col if i & 1 else col2, 180)
+            hw = g.get_width() // 2
+            seq.append((g, (int(x + math.cos(ang) * r * wob) // 3 * 3 - hw,
+                            int(y + math.sin(ang) * r * wob * 0.8) // 3 * 3 - hw)))
+        fblits(surf, seq)
 
     def _pickups(self, surf, ox, oy) -> None:
         sm = assets.sprites.small
@@ -758,7 +858,7 @@ def _sort_key(it):
 
 
 class _Ambient:
-    """Ambientní život biomu: světlušky (farma), listí (les), prach (město), sníh (hory), jiskry (továrna).
+    """Ambientní život biomu: listí (les), prach (město), sníh (hory), jiskry (továrna). Světlušky byly rušivé.
     Souřadnice ve světě zabalené kolem kamery – při pohybu se posouvají s mapou (žádná „špína na čočce“)."""
     SPAN_X, SPAN_Y = W + 60, H + 60
 
@@ -766,7 +866,7 @@ class _Ambient:
         import random as _r
         rng = _r.Random(11)
         self.biome = biome
-        spec = {"farm": [("fly", 14)], "forest": [("leaf", 16), ("fly", 6)], "city": [("mote", 18)],
+        spec = {"farm": [], "forest": [("leaf", 16)], "city": [("mote", 18)],
                 "mountain": [("snow", 34)], "factory": [("ember", 16), ("mote", 8)]}.get(biome, [("mote", 10)])
         self.items = []
         for kind, n in spec:
@@ -791,20 +891,15 @@ class _Ambient:
             elif kind == "ember":
                 it[1] -= 34 * sp * dt
                 it[0] += math.sin(self.t * 2 + it[2]) * 14 * dt
-            elif kind == "fly":
-                it[0] += math.cos(self.t * 0.7 * sp + it[2]) * 22 * dt
-                it[1] += math.sin(self.t * 0.9 * sp + it[2] * 1.3) * 16 * dt
             else:
                 it[0] += 8 * sp * dt
                 it[1] += math.sin(self.t * 0.5 + it[2]) * 5 * dt
 
     def draw(self, surf, ox: float, oy: float, run, lit: bool) -> None:
         sx_span, sy_span = self.SPAN_X, self.SPAN_Y
-        ft = run.final_time or 600
-        night = 0.15 if run.victory else 1.0 - clamp(run.time / ft, 0, 1) * 0.85
         adds = []
         for x, y, ph, kind, sp in self.items:
-            glowy = kind in ("fly", "ember", "snow")     # sníh až po nočním přítmí – jinak splyne se zemí
+            glowy = kind in ("ember", "snow")     # sníh až po nočním přítmí – jinak splyne se zemí
             if glowy != lit:
                 continue
             par = 1.0 + (sp - 1.0) * 0.4
@@ -822,13 +917,6 @@ class _Ambient:
                 surf.fill(mul_color(c, 0.7), (px, py + 3, 3, 3))
             elif kind == "mote":
                 surf.fill((200, 200, 205), (px // 3 * 3, py // 3 * 3, 3, 3))
-            elif kind == "fly":
-                b = 0.5 + 0.5 * math.sin(self.t * 2.4 * sp + ph * 4)
-                k = b * night
-                if k > 0.2:
-                    adds.append((glow_sprite(2, (170, 240, 90), k), (px - 7, py - 7)))
-                    if k > 0.45:
-                        surf.fill((235, 255, 170), (px // 3 * 3, py // 3 * 3, 3, 3))
             elif kind == "ember":
                 k = 0.5 + 0.5 * math.sin(self.t * 5 + ph * 3)
                 g = glow_sprite(2, (255, 150, 50), 0.4 + 0.6 * k)

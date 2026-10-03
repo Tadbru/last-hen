@@ -29,6 +29,15 @@ Screenshoty: před `polish/before/`, po `polish/after/` (stejná sada a stejný 
 - `tools/make_store_assets.py` vyrobí `store/`: ikonu 512×512, feature graphic 1024×500 a 5 screenshotů 1080×1920 s českými popisky (menu, boj, level-up, boss, vítězství).
 - `LICENSES.md`: licence závislostí a prohlášení o soukromí.
 
+### Kolo 2 (podle zpětné vazby)
+- **Světlušky** jsou pryč z menu i ze hry.
+- **Dorty a smrad – „velké růžové skvrny“**: nedělaly je částice, ale **bílé bliknutí celého davu**, protože šlehačka i mrak zraňují všechny uvnitř naráz každých 0,4–0,5 s. Plošné poškození teď nebliká a nechrlí čísla, místo toho občas drobná jiskřička. Poškození i RNG zůstaly stejné (ověřeno).
+- **Dort**: místo růžových kruhů stín padajícího dortu a tečkovaný kroužek. Dopad = šlehačkový cákanec s posypem (žádný oheň). Šlehačka na zemi = rozházené pixelové kopečky.
+- **Smrad**: pixelový mrak z otáčejících se chuchvalců plynu, bubliny a komiksové „smradlavé čárky“. Aura Biologické zbraně = toxický prstenec.
+- **Lišky v menu** chodí normálním tempem (snímek se dřív měnil s každým pixelem posunu).
+- **Menu**: nová krajina v art pixelech: obloha s ditherem, vzdálené kopce se smrky, kopec s kurníkem, strašákem a stodolou, louka bez předělu s trsy trávy a kytkami, plot a balíky sena. Feature graphic do obchodu používá stejnou krajinu.
+- Snímky: `polish/after/menu.png`, `polish/after_weapons/` (dort a smrad v pozdní hře).
+
 ## Zjištění z kódu, která stojí za pozornost
 - **Hra už byla vizuálně soudržná.** Pixel art, vlastní bitmapový font s diakritikou, stíny, y-sorting, omezený třes (trauma model), omezovač záblesků a nastavení přístupnosti tu byly. Rozšiřoval jsem existující systémy, nic paralelního nevzniklo.
 - **`Run.rng` je herní RNG** (deterministické denní výzvy). Všechen nový vizuální kód používá vlastní RNG částic, ambientu nebo menu. Pozor ale na **existující únik**: `damage_enemy` bere `run.rng` na posun čísla poškození jen když hra není headless. Headless simulace a skutečná hra se stejným seedem se proto rozejdou. Nebyl to úkol této práce, nechal jsem to být.

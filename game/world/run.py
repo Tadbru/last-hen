@@ -492,7 +492,9 @@ class Run:
     # =====================================================================================
     def damage_enemy(self, e, dmg: float, src, kx: float = 0.0, ky: float = 0.0, kb: float = 0.0,
                      crit: bool = True, slow: float = 0.0, slow_t: float = 1.2, freeze: float = 0.0,
-                     stun: float = 0.0, hyp: float = 0.0) -> float:
+                     stun: float = 0.0, hyp: float = 0.0, flash: bool = True) -> float:
+        """flash=False: plošné poškození v intervalech (mrak, šlehačka, aura) – jen vizuál: bez bílého
+        bliknutí celého davu a bez záplavy čísel, místo toho drobná bublinka."""
         if not e.alive or dmg <= 0 and not kb:
             return 0.0
         st = self.player.stats
@@ -517,16 +519,22 @@ class Run:
             dmg = e.ctrl.modify_damage(dmg)
         if dmg > 0:
             e.hp -= dmg
-            if e.flash <= 0 and not self.headless:
-                self.particles.hit(e.x, e.y - e.r * 0.6, kx, ky, (255, 230, 150) if is_crit else (255, 250, 225))
-            e.flash = 0.09
+            if not flash:
+                if not self.headless and self.particles.rng.random() < 0.35:
+                    self.particles.sparkle(e.x, e.y - e.r, src.d.color if src is not None else (200, 255, 150), 1)
+            else:
+                if e.flash <= 0 and not self.headless:
+                    self.particles.hit(e.x, e.y - e.r * 0.6, kx, ky, (255, 230, 150) if is_crit else (255, 250, 225))
+                e.flash = 0.09
             if src is not None:
                 src.damage_dealt += dmg
             if self.show_damage and not self.headless:
                 if is_crit:
                     self.add_text(e.x, e.y - e.r - 6, f"{int(dmg)}!", (255, 220, 60), 2, 0.8)
                 elif dmg >= 1:
-                    self.add_text(e.x + self.rng.uniform(-6, 6), e.y - e.r - 4, str(int(dmg)), (255, 255, 255), 2, 0.55)
+                    jx = self.rng.uniform(-6, 6)        # RNG se čerpá vždy stejně (tok herního RNG beze změny)
+                    if flash:
+                        self.add_text(e.x + jx, e.y - e.r - 4, str(int(dmg)), (255, 255, 255), 2, 0.55)
         if kb and not e.boss and e.kb_res < 1:
             d = math.hypot(kx, ky)
             if d > 0:
@@ -611,7 +619,7 @@ class Run:
 
     def area_damage(self, x: float, y: float, r: float, dmg: float, src, kb: float = 0.0, slow: float = 0.0,
                     slow_t: float = 1.2, stun: float = 0.0, freeze: float = 0.0, crit: bool = True,
-                    exclude: set | None = None) -> int:
+                    exclude: set | None = None, flash: bool = True) -> int:
         hits = 0
         buf = self._qbuf
         buf.clear()
@@ -625,20 +633,25 @@ class Run:
                     if e.id in exclude:
                         continue
                     exclude.add(e.id)
-                self.damage_enemy(e, dmg, src, dx, dy, kb, crit, slow, slow_t, 0.0 if not freeze else freeze, stun)
+                self.damage_enemy(e, dmg, src, dx, dy, kb, crit, slow, slow_t, 0.0 if not freeze else freeze, stun,
+                                  flash=flash)
                 hits += 1
         return hits
 
     def explosion(self, x, y, r, dmg, src, color=(255, 200, 80), kb: float = 200, big: bool = False,
-                  hurt_player: float = 0.0, crit: bool = True) -> None:
+                  hurt_player: float = 0.0, crit: bool = True, fx: str = "fire") -> None:
         if dmg > 0:
             self.area_damage(x, y, r, dmg, src, kb=kb, crit=crit)
         if hurt_player > 0:
             p = self.player
             if (p.x - x) ** 2 + (p.y - y) ** 2 < (r + p.r) ** 2:
                 p.take_damage(hurt_player, x, y, "výbuch")
-        self.add_ring(x, y, r * 0.3, r, 0.28 if not big else 0.5, color, 6 if not big else 12)
-        self.particles.explosion(x, y, r, color, big)
+        if fx == "cream":
+            self.add_ring(x, y, r * 0.5, r, 0.25, (255, 250, 240), 4 if not big else 6)
+            self.particles.splat(x, y, r)
+        else:
+            self.add_ring(x, y, r * 0.3, r, 0.28 if not big else 0.5, color, 6 if not big else 12)
+            self.particles.explosion(x, y, r, color, big)
         self.sfx("nuke" if big else "explode", 0.7 if not big else 1.0)
         if src is not None:
             # výbuch vlastní zbraně: jen jemné cuknutí, žádná vibrace
@@ -1272,7 +1285,7 @@ class Run:
             a.next -= dt
             if a.next <= 0:
                 a.next = a.tick
-                self.area_damage(a.x, a.y, a.r, a.dmg, a.src, slow=a.slow, slow_t=a.tick + 0.3, crit=False)
+                self.area_damage(a.x, a.y, a.r, a.dmg, a.src, slow=a.slow, slow_t=a.tick + 0.3, crit=False, flash=False)
                 if a.kind == "cloud" and self.tick % 2 == 0:
                     self.particles.puff(a.x + self.rng.uniform(-a.r, a.r) * 0.6, a.y + self.rng.uniform(-a.r, a.r) * 0.4,
                                         1, a.color, 20, 10)

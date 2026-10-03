@@ -138,38 +138,25 @@ def make_screenshots(shots: dict[str, pygame.Surface], font) -> None:
 
 
 def make_feature(bank, font) -> None:
-    """Feature graphic 1024×500 – kreslený v 512×250 a zvětšený 2× (čisté pixely)."""
+    """Feature graphic 1024×500 – výřez 512×250 z noční krajiny menu (stejný styl jako hra), zvětšený 2×."""
     from game.config import C_GOLD, C_OUTLINE
     from game.gfx import pixelart as pa
-    from game.gfx.tiles import TILE, ground_tiles
-    from game.data.biomes import BIOMES
+    from game.scenes.menu import _menu_backdrop, _moon
     s = pygame.Surface((512, 250))
-    for y in range(0, 250, 3):
-        k = y / 250
-        s.fill((int(30 + 40 * k), int(20 + 18 * k), int(60 + 10 * k)), (0, y, 512, 3))
+    s.blit(_menu_backdrop(), (0, 0), pygame.Rect(14, 236, 512, 250))
     rng = random.Random(3)
-    for _ in range(40):
-        s.fill((255, 250, 220), (rng.randrange(512), rng.randrange(150), 1, 1))
-    pygame.draw.circle(s, (250, 240, 200), (452, 40), 18)
-    pygame.draw.circle(s, (230, 220, 180), (458, 36), 4)
-    grass = pygame.Surface((512, 70))
-    t = ground_tiles(BIOMES["farm"])[0]
-    for x in range(0, 512, TILE // 2):
-        grass.blit(pygame.transform.scale(t, (TILE // 2, TILE // 2)), (x, 0))
-    grass.fill((130, 138, 176), special_flags=pygame.BLEND_MULT)
-    s.blit(grass, (0, 190))
-    pygame.draw.ellipse(s, (40, 70, 44), (180, 160, 420, 80))
-    s.blit(pa.silhouette(bank.misc["barn"], (26, 40, 30)), (390, 96))
-    font.draw(s, "LAST", (150, 40), (255, 240, 220), 6, "midtop", outline=C_OUTLINE)
-    font.draw(s, "CHICKEN", (150, 104), C_GOLD, 6, "midtop", outline=C_OUTLINE)
-    font.draw(s, "poslední slepice proti zombie liškám", (150, 172), (240, 230, 250), 1, "midtop",
-              outline=C_OUTLINE)
-    hen = pa.scale(bank.players["hen"].frames[0][0], 2)
-    s.blit(pa.make_shadow(80, 16, 110), (316, 214))
-    s.blit(hen, hen.get_rect(midbottom=(356, 226)))
+    for _ in range(30):
+        s.fill((255, 250, 220), (rng.randrange(512) // 2 * 2, rng.randrange(90) // 2 * 2, 2, 2))
+    moon = pygame.transform.scale(_moon(), (51, 51))
+    s.blit(moon, (440, 14))
+    font.draw(s, "LAST CHICKEN", (256, 16), C_GOLD, 5, "midtop", outline=C_OUTLINE)
+    font.draw(s, "poslední slepice proti zombie liškám", (256, 76), (240, 230, 250), 1, "midtop", outline=C_OUTLINE)
+    hen = pa.scale(bank.players["hen"].frames[0][0], 1.5)
+    s.blit(pa.make_shadow(56, 12, 110), (228, 238))
+    s.blit(hen, hen.get_rect(midbottom=(256, 246)))
     fox = bank.enemies["fox"].frames[1][0]
-    for x, y in ((440, 214), (478, 228), (264, 232)):
-        img = fox if x > 356 else pa.flip(fox)
+    for x, y in ((392, 249), (440, 247), (120, 249)):
+        img = fox if x > 256 else pa.flip(fox)
         s.blit(img, img.get_rect(midbottom=(x, y)))
     pygame.image.save(pygame.transform.scale(s, (1024, 500)), os.path.join(OUT, "feature_graphic_1024x500.png"))
 
