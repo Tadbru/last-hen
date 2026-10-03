@@ -159,3 +159,17 @@ Všech 7 bodů „Definice hotovo“ je splněno:
 - iOS: nativní build z pygame není reálně možný (pygame iOS nepodporuje, Apple vyžaduje App Store/TestFlight
   s placeným účtem a Macem). Cesta pro iOS = port do multiplatformního enginu (Godot) – data v `game/data/`
   jsou přenositelná.
+
+## Opravy podle bug reportu (3. 10. 2026)
+- B-01 trvalý třes: třes má strop podle zdroje (vlastní zbraně max. ~1 px, silné otřesy jen bossové a hazardy),
+  „kick“ kamery má strop 14 px, výbuchy hráčových zbraní nevibrují. Bot, plný mód: snímky s posunem > 10 px
+  z 22–31 % na ≤ 0,6 %.
+- B-02 stroboskop: Zlatá bomba už nebliká, běžné záblesky max. 1× za 2 s a slabší, nový vypínač
+  „Záblesky obrazovky“ v Nastavení. Záblesky za minutu ze 114–140 na ≤ 8.
+- Vibrace: na telefonu min. 0,35 s rozestup.
+- Prázdné level-upy: když už není co vylepšit, levelup se vyřeší sám (mince + 5 % zdraví) bez pauzy.
+- Mobil: level-up ignoruje dotyky 0,6 s po otevření, Skip se potvrzuje druhým klepnutím,
+  Restart a Vzdát se v pauze mají potvrzovací dialog.
+- Stavy: mini-boss se při vzniku arény přenese dovnitř (dřív zmizel a zůstal v seznamu bossů –
+  boss rush se pak zasekl), během vítězné animace se ruší dobíhající útoky a smrt ve stejném ticku
+  jako výhra má přednost výhra, výsledek denní výzvy se zapisuje k datu výzvy (seed), ne k datu dohrání.

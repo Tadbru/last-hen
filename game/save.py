@@ -21,6 +21,7 @@ DEFAULT_SETTINGS = {
     "show_fps": False,
     "fullscreen": False,
     "vibration": True,
+    "flashes": True,
 }
 
 DEFAULT: dict = {

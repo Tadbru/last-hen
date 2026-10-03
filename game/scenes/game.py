@@ -43,6 +43,7 @@ class GameScene(Scene):
         self.run.show_damage = app.save.settings.get("damage_numbers", True)
         self.run.camera.shake_on = app.save.settings.get("screen_shake", True)
         self.run.camera.haptics = True
+        self.run.flashes_on = app.save.settings.get("flashes", True)
         self.renderer = RunRenderer(self.run)
         self.joy = Joystick()
         self.overlay = None

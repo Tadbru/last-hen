@@ -65,6 +65,11 @@ def _candidates(run) -> list[tuple[str, str, float]]:
     return out
 
 
+def has_choices(run) -> bool:
+    """Je co vylepšit? (Pokud ne, levelup se vyřeší automaticky bez přerušení hry.)"""
+    return bool(_candidates(run))
+
+
 def roll_rarity(run) -> int:
     luck = run.player.stats.luck * (2.0 if "lucky" in run.mods else 1.0)
     r = run.rng.random()
@@ -411,6 +416,14 @@ def daily_spec(day: _dt.date | None = None) -> dict:
         biome=rng.choice(BIOME_ORDER),
         modifier=rng.choice(M.DAILY_MODIFIERS)["id"],
     )
+
+
+def daily_date(seed: int) -> str:
+    """Datum denní výzvy z jejího seedu (YYYYMMDD); při neplatném seedu dnešek."""
+    try:
+        return _dt.datetime.strptime(str(int(seed)), "%Y%m%d").date().isoformat()
+    except (ValueError, TypeError):
+        return today().isoformat()
 
 
 def daily_leaderboard(save, spec: dict) -> list[tuple[str, int, bool]]:

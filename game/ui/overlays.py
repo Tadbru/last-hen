@@ -28,7 +28,14 @@ class Overlay:
         self._pressed = None
         self.done = False
 
+    lock = 0.0       # s po otevření, kdy se ignorují dotyky (ochrana proti náhodnému klepnutí)
+
     def handle(self, ev) -> None:
+        if ev.type in ("down", "up") and self.t < self.lock:
+            if self._pressed is not None:
+                self._pressed.pressed = False
+                self._pressed = None
+            return
         if ev.type == "down":
             for b in self.buttons:
                 if b.contains(ev.x, ev.y) and b.enabled:
@@ -79,9 +86,12 @@ class Overlay:
 # ---------------------------------------------------------------------------------------------
 class LevelUpOverlay(Overlay):
     CARD_H = 176
+    lock = 0.6       # palec často zrovna drží joystick ve spodní části obrazovky
+    SKIP_CONFIRM = 2.5
 
     def __init__(self, scene) -> None:
         super().__init__(scene)
+        self.skip_arm = 0.0
         self.banish_mode = False
         self.offer_id = None
         self.hover = -1
@@ -105,6 +115,14 @@ class LevelUpOverlay(Overlay):
         if id(r.offer) != self.offer_id:
             self.offer_id = id(r.offer)
             self.t = 0.0
+            self.skip_arm = 0.0
+        if self.skip_arm > 0:
+            self.b_skip.text = "Opravdu?"
+            self.b_skip.sub = "klepni znovu"
+            self.b_skip.pulse = True
+        else:
+            self.b_skip.text = "Skip"
+            self.b_skip.pulse = False
 
     def _reroll(self) -> None:
         if progression.reroll(self.run):
@@ -112,6 +130,12 @@ class LevelUpOverlay(Overlay):
             assets.audio.play("teleport", 0.4)
 
     def _skip(self) -> None:
+        # Skip zahodí celý levelup – musí se potvrdit druhým klepnutím
+        if self.skip_arm <= 0:
+            self.skip_arm = self.SKIP_CONFIRM
+            self._sync()
+            return
+        self.skip_arm = 0.0
         progression.skip(self.run)
         assets.audio.play("coin")
 
@@ -164,6 +188,8 @@ class LevelUpOverlay(Overlay):
 
     def update(self, dt: float) -> None:
         super().update(dt)
+        if self.skip_arm > 0:
+            self.skip_arm = max(0.0, self.skip_arm - dt)
         self._sync()
 
     def draw(self, surf) -> None:
@@ -353,12 +379,22 @@ class PauseOverlay(Overlay):
         self._sync()
 
     def _quit(self) -> None:
-        self.done = True
-        self.scene.give_up()
+        from ..scenes.base import Dialog
+
+        def do():
+            self.done = True
+            self.scene.give_up()
+        self.scene.modal = Dialog("Vzdát se?", "Run skončí a dostaneš odměnu za dosavadní výkon.",
+                                  [("Vzdát se", do, "danger"), ("Hrát dál", None, "primary")], icon="skull")
 
     def _restart(self) -> None:
-        self.done = True
-        self.scene.restart()
+        from ..scenes.base import Dialog
+
+        def do():
+            self.done = True
+            self.scene.restart()
+        self.scene.modal = Dialog("Začít znovu?", "Rozehraný run se zahodí bez odměny.",
+                                  [("Restart", do, "danger"), ("Hrát dál", None, "primary")], icon="reroll")
 
     def on_key(self, key) -> None:
         if key == pygame.K_p:

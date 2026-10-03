@@ -231,7 +231,12 @@ def cards_reroll_skip_banish():
     run = Run(RunConfig(seed=4, rerolls=3, banishes=2))
     for _ in range(80):
         run.pending_levelups += 1
+        coins0 = run.coins
         run._open_levelup()
+        if not progression.has_choices(run):
+            # všechno vylepšeno → levelup se vyřeší sám (mince + léčení) a hru nepřeruší
+            assert run.state == "playing" and run.pending_levelups == 0 and run.coins > coins0
+            continue
         offer = run.offer
         assert len(offer) == 3
         r = random.random()
@@ -404,6 +409,11 @@ def full_game_flow_through_scenes():
     a.scene.pause()
     a.render()
     a.scene.overlay._quit()
+    assert a.scene.modal is not None, "Vzdát se musí chtít potvrzení"
+    from game.scenes.base import Ev
+    bb = a.scene.modal.buttons[0]
+    a.scene.handle(Ev("down", *bb.rect.center))
+    a.scene.handle(Ev("up", *bb.rect.center))
     for _ in range(40):
         a.step(DT)
     assert isinstance(a.scene, ResultsScene)

@@ -25,8 +25,10 @@ class ResultsScene(Scene):
         self.score = progression.score(run)
         if run.cfg.mode == "daily":
             d = app.save["daily"]
-            d["last_played"] = progression.today().isoformat()
-            d["scores"].append({"date": progression.today().isoformat(), "score": self.score, "char": run.char.id})
+            # datum výzvy podle seedu runu – výsledek dohraný po půlnoci patří ke dni, kdy výzva začala,
+            # a nezablokuje výzvu nového dne (last_played se nastavuje už při startu)
+            day = progression.daily_date(run.cfg.seed)
+            d["scores"].append({"date": day, "score": self.score, "char": run.char.id})
             d["scores"] = d["scores"][-40:]
             app.save["tokens"] += 1
             self.msgs.insert(0, "Denní výzva: +1 žeton")

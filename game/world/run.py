@@ -29,6 +29,8 @@ from .mapgen import WorldMap
 from .player import Player
 
 ARENA_R = 430.0
+FLASH_GAP = 2.0            # min. rozestup běžných záblesků (s)
+PLAYER_FX_CAP = 0.3        # strop třesu od vlastních zbraní (offset ≈ 1 px)
 CROW_KILLS = 70
 
 
@@ -149,6 +151,9 @@ class Run:
         self.speech: list[list] = []   # [entity, text, t, dead]
         self.flash_t = 0.0
         self.flash_col = (255, 255, 255)
+        self.flash_cd = 0.0
+        self.flash_count = 0
+        self.flashes_on = True
         self.revived = False
         self.victory = False
         self.result = None
@@ -174,10 +179,17 @@ class Run:
         if not self.headless and assets.audio is not None:
             assets.audio.play(name, vol)
 
-    def shake(self, amount: float) -> None:
-        self.camera.shake(amount)
+    def shake(self, amount: float, cap: float = 1.0) -> None:
+        self.camera.shake(amount, cap)
 
-    def flash(self, color, dur: float = 0.1) -> None:
+    def flash(self, color, dur: float = 0.1, important: bool = False) -> None:
+        """Záblesk přes obrazovku. Lze vypnout v Nastavení; běžné záblesky max. 1× za FLASH_GAP s."""
+        if not self.flashes_on:
+            return
+        if not important and self.flash_cd > 0:
+            return
+        self.flash_cd = FLASH_GAP
+        self.flash_count += 1
         self.flash_col = color
         self.flash_t = max(self.flash_t, dur)
 
@@ -242,7 +254,7 @@ class Run:
         self.weapons[idx] = nw
         self.discovered["evolutions"].add(nw.id)
         self.banner(f"EVOLUCE: {nw.d.name}!", (255, 214, 70), 2.5)
-        self.flash((255, 240, 180), 0.2)
+        self.flash((255, 240, 180), 0.2, important=True)
         self.sfx("fanfare")
         self.camera.vibrate(10)
 
@@ -312,9 +324,18 @@ class Run:
             # aréna kolem hráče
             self.arena = (p.x, p.y, ARENA_R)
             for e in self.enemies:
-                if (e.x - p.x) ** 2 + (e.y - p.y) ** 2 > (ARENA_R - 20) ** 2:
-                    e.alive = False
-                    self.particles.puff(e.x, e.y, 2, (200, 200, 200))
+                dx, dy = e.x - p.x, e.y - p.y
+                d2 = dx * dx + dy * dy
+                if d2 > (ARENA_R - 20) ** 2:
+                    if e.boss:
+                        # rozpracovaný mini-boss se přenese do arény (dřív zmizel a „visel“ v seznamu bossů)
+                        d = math.sqrt(d2) or 1.0
+                        e.x = p.x + dx / d * (ARENA_R - 90)
+                        e.y = p.y + dy / d * (ARENA_R - 90)
+                        e.alpha = 255
+                    else:
+                        e.alive = False
+                        self.particles.puff(e.x, e.y, 2, (200, 200, 200))
             a = -math.pi / 2
             x, y = p.x, p.y - 300
         else:
@@ -365,7 +386,7 @@ class Run:
             self.bosses.remove(ctrl)
         self.explosion(e.x, e.y, 120, 0, None, (255, 220, 120), big=True)
         self.particles.feathers(e.x, e.y, 40, (255, 240, 220), 300)
-        self.flash((255, 255, 255), 0.15)
+        self.flash((255, 255, 255), 0.15, important=True)
         self.shake(0.8)
         self.camera.vibrate(16)
         self.coins += 25 if bid != "zombie_rooster" else 100
@@ -375,6 +396,12 @@ class Run:
             self.state = "victory_anim"
             self.state_t = 3.0
             self.victory = True
+            # dobíhající útoky po vítězství zrušit (dřív mohly hráče zabít během vítězné animace)
+            self.telegraphs = []
+            self.bombs = []
+            self.eprojs = []
+            self.waves = [w for w in self.waves if not w.hurt_player]
+            self.player.invuln = 999.0
             self.sfx("victory")
             self.banner("SLUNCE VYCHÁZÍ!", (255, 220, 120), 3.0)
         else:
@@ -523,7 +550,7 @@ class Run:
             self.shake(0.3)
         self.sfx("plop", 0.5)
         if self.kills % 3 == 0:
-            self.shake(0.035)
+            self.shake(0.035, 0.2)
 
     def area_damage(self, x: float, y: float, r: float, dmg: float, src, kb: float = 0.0, slow: float = 0.0,
                     slow_t: float = 1.2, stun: float = 0.0, freeze: float = 0.0, crit: bool = True,
@@ -560,9 +587,13 @@ class Run:
         self.particles.sparks(x, y, n, color, 260 if not big else 420)
         self.particles.puff(x, y, n // 2, (90, 80, 80) if not big else (120, 100, 90), 70, 12)
         self.sfx("nuke" if big else "explode", 0.7 if not big else 1.0)
-        self.shake(0.12 if not big else 0.55)
-        if big:
-            self.camera.vibrate(10)
+        if src is not None:
+            # výbuch vlastní zbraně: jen jemné cuknutí, žádná vibrace
+            self.shake(0.03 if not big else 0.08, PLAYER_FX_CAP)
+        else:
+            self.shake(0.12 if not big else 0.45, 0.7)
+            if big:
+                self.camera.vibrate(10)
 
     def enemies_on_segment(self, x1, y1, x2, y2, half_w: float) -> list:
         out = []
@@ -822,6 +853,7 @@ class Run:
         self.tick += 1
         self.time += dt
         self.flash_t = max(0.0, self.flash_t - real_dt)
+        self.flash_cd = max(0.0, self.flash_cd - real_dt)
         if crow:
             self.crow()
 
@@ -868,6 +900,8 @@ class Run:
 
         # úklid
         self.enemies = [e for e in self.enemies if e.alive]
+        if self.bosses and any(not c.e.alive for c in self.bosses):
+            self.bosses = [c for c in self.bosses if c.e.alive]
         if self.tick % 30 == 0:
             self.allies = [a for a in self.allies if a.alive]
 
@@ -900,6 +934,16 @@ class Run:
 
     def _open_levelup(self) -> None:
         from .. import progression
+        if not progression.has_choices(self):
+            n = self.pending_levelups
+            self.pending_levelups = 0
+            gain = n * (5 + self.level // 5)
+            self.coins += gain
+            p = self.player
+            p.heal(p.stats.max_hp * 0.05 * n)
+            self.add_text(p.x, p.y - 46, f"Úr. {self.level}  +{gain} mincí", (255, 214, 70), 2, 1.2)
+            self.sfx("coin", 0.6)
+            return
         self.state = "levelup"
         self.offer = progression.make_offer(self)
         self.sfx("levelup")
@@ -922,6 +966,12 @@ class Run:
             self._open_chest()
 
     def on_player_death(self) -> None:
+        if self.victory:
+            # smrt ve stejném ticku jako porážka finálního bosse – vítězství má přednost
+            p = self.player
+            p.dead = False
+            p.hp = max(1.0, p.hp)
+            return
         self.state = "dying"
         self.state_t = 1.4
         p = self.player

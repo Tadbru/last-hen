@@ -127,7 +127,7 @@ class RunRenderer:
         self._texts(surf, ox, oy)
         self._speech(surf, ox, oy)
         if run.flash_t > 0:
-            a = int(clamp(run.flash_t / 0.15, 0, 1) * 160)
+            a = int(clamp(run.flash_t / 0.15, 0, 1) * 110)
             fl = pygame.Surface((W, H))
             fl.fill(run.flash_col)
             fl.set_alpha(a)

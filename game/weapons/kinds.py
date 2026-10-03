@@ -50,7 +50,6 @@ class LobWeapon(Weapon):
         dmg = pr.dmg
         if nuke:
             run.explosion(pr.x, pr.y, r, dmg, self, (255, 214, 70), kb=s["kb"], big=True)
-            run.flash((255, 240, 180), 0.12)
         else:
             run.explosion(pr.x, pr.y, r, dmg, self, (255, 240, 200), kb=s["kb"])
             run.particles.blobs(pr.x, pr.y, 6, (255, 220, 60), 120)
@@ -96,7 +95,7 @@ class PulseWeapon(Weapon):
                          stun=s.get("stun", 0), color=col, follow=True)
             run.sfx("wave", 0.7)
             if evo:
-                run.shake(0.12)
+                run.shake(0.06, 0.25)
 
 
 class ChicksWeapon(Weapon):
@@ -221,7 +220,7 @@ class LaserWeapon(Weapon):
             for e in run.enemies_on_segment(sx, sy, ex, ey, w / 2):
                 run.damage_enemy(e, self.dmg() * mult, self, math.cos(a), math.sin(a), 40)
             run.add_beam([(sx, sy), (ex, ey)], w, life, self.d.color, "laser")
-        run.shake(0.06)
+        run.shake(0.04, 0.25)
 
 
 class NestWeapon(Weapon):
