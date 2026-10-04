@@ -304,6 +304,7 @@ def _boss_fight(boss: str, mode: str, win: bool) -> None:
         else:
             assert boss in run.bosses_killed
     else:
+        run.player.invuln = 0.0          # smrtelný zásah nesmí padnout do krátké nesmrtelnosti po předchozím zásahu
         run.player.take_damage(1e9)
         for _ in range(200):
             run.update(DT)
@@ -380,6 +381,7 @@ def full_game_flow_through_scenes():
         a.step(DT)
         if i % 4 == 0:
             a.render()
+    gs.run.player.invuln = 0.0
     gs.run.player.take_damage(1e9)
     for _ in range(200):
         a.step(DT)
@@ -546,6 +548,400 @@ def crash_screen_and_log():
     a.scene.back()
     a.step(DT)
     assert isinstance(a.scene, MenuScene)
+
+
+@test
+def endless_night():
+    """Nekonečná noc: zámek, 1. noc = Plný mód, Kohout nevyhrává run, další noc, noční síla, rekord, výsledky."""
+    a = app()
+    from game import progression
+    from game.bot import Bot
+    from game.config import DT
+    from game.data import waves as WV
+    from game.data.passives import MAX_PASSIVE_LEVEL, PASSIVE_ORDER
+    from game.data.weapons import BASE_WEAPONS, MAX_WEAPON_LEVEL
+    from game.scenes.game import GameScene, build_config
+    from game.scenes.results import ResultsScene
+    from game.scenes.select import SelectScene
+    from game.world.run import Run, RunConfig
+    s = a.save
+    # zámek: bez výzvy „Celá noc“ nejde vybrat
+    s["challenges"].pop("full_night", None)
+    sel = SelectScene(a)
+    a.set_scene(sel)
+    assert not sel.b_endless.enabled and sel.b_endless.sub == "zamčeno"
+    s["challenges"]["full_night"] = True
+    sel = SelectScene(a)
+    a.set_scene(sel)
+    assert sel.b_endless.enabled
+    sel.b_endless.click()
+    assert sel.mode == "endless"
+    # 1. noc má stejný rozpis jako Plný mód
+    run = Run(RunConfig(mode="endless", seed=3, headless=True))
+    run.god = True                  # slepice bez buildu by v 10:00 nepřežila – test hlídá logiku nocí
+    assert run.director.bosses == list(WV.BOSSES_FULL) and run.director.elites == list(WV.ELITES_FULL)
+    assert run.director.final_time == WV.FULL_LENGTH
+    # Kohout padne → žádné vítězství, začne 2. noc se silnějšími bossy
+    run.time = 600.0
+    run.director.bosses = []        # rozpis 1. noci ověřen výše; Kohout se spawne ručně
+    run.director.elites = []
+    run.spawn_boss("zombie_rooster")
+    ctrl = run.final_boss
+    ctrl.state = "fight"
+    for _ in range(3):
+        if ctrl.e.alive:
+            run.damage_enemy(ctrl.e, ctrl.e.max_hp, None, crit=False)
+            ctrl.state = "fight"
+            ctrl.invuln = 0.0
+            for _ in range(120):
+                run.update(DT)
+                if run.state == "levelup":
+                    progression.apply_card(run, run.offer[0])
+                elif run.state == "chest":
+                    run.resume()
+    assert "zombie_rooster" in run.bosses_killed, run.bosses_killed
+    assert not run.victory and run.state in ("playing", "chest", "levelup"), run.state
+    assert run.arena is None and run.final_boss is None
+    assert run.director.night == 2
+    assert [b for _, b in run.director.bosses] == [b for _, b in WV.ENDLESS_CYCLE]
+    run.director.bosses = [(run.time, "spy_fox")]
+    run.update(DT)
+    spy = next(c for c in run.bosses if c.e.state == "spy_fox")
+    assert abs(spy.e.max_hp - 2000 * WV.endless_boss_hp(2)) < 1, spy.e.max_hp
+    # od 2. noci další boss počká, dokud předchozí žije, a po jeho porážce přijde až po oddechu (B-82)
+    run.director.bosses = [(run.time, "rabbit")]
+    for _ in range(10):
+        run.update(DT)
+        if run.state == "levelup":
+            progression.apply_card(run, run.offer[0])
+        elif run.state == "chest":
+            run.resume()
+    assert not any(c.e.state == "rabbit" for c in run.bosses), "boss 2. noci přišel, i když předchozí žije"
+    spy.state, spy.invuln = "fight", 0.0
+    run.damage_enemy(spy.e, spy.e.hp + 1, None, crit=False)
+    assert not spy.e.alive
+    assert run.director.bosses[0][0] >= run.time + WV.ENDLESS_BOSS_GAP - 0.01, run.director.bosses
+    run.director.bosses = []
+    # noční síla: hotový build → level-up přidá sílu, nepřeruší hru
+    for wid in BASE_WEAPONS:
+        if len(run.weapons) >= 6:
+            break
+        if run.weapon(wid) is None:
+            run.add_weapon(wid, MAX_WEAPON_LEVEL)
+    for w in run.weapons:
+        w.set_level(MAX_WEAPON_LEVEL)
+    for pid in PASSIVE_ORDER[:6]:
+        run.add_passive(pid, MAX_PASSIVE_LEVEL)
+    might0 = run.player.stats.might
+    run.state = "playing"
+    run.pending_levelups = 2
+    run.pause_cd = 0.0
+    run.update(DT)
+    assert run.state == "playing" and run.night_power == 2, (run.state, run.night_power)
+    assert abs(run.player.stats.might - might0 * (1 + 2 * WV.ENDLESS_NIGHT_MIGHT)) < 1e-6
+    # celý run ve scéně s botem, pak smrt → výsledky, rekord a výzva
+    s["records"]["best_time_endless"] = 0
+    s["records"]["endless_best"] = {}
+    gs = GameScene(a, build_config(a, "hen", "farm", "endless", seed=8))
+    a.set_scene(gs)
+    bot = Bot(gs.run)
+    for i in range(1200):
+        bot.step(DT)
+        if i % 4 == 0:
+            a.render()
+    gs.run.time = WV.FULL_LENGTH * 1.6
+    gs.run.revived = True
+    gs.run.player.invuln = 0.0
+    gs.run.player.take_damage(1e9)
+    for _ in range(200):
+        a.step(DT)
+        if isinstance(a.scene, ResultsScene):
+            break
+    for _ in range(60):
+        a.step(DT)
+    a.render()
+    assert isinstance(a.scene, ResultsScene), type(a.scene)
+    assert a.scene.new_record
+    assert s["records"]["best_time_endless"] == 960, s["records"]["best_time_endless"]
+    # rekord se vede i pro mapu a obtížnost (B-85)
+    assert progression.endless_record(s, "farm", "normal") == 960, s["records"]["endless_best"]
+    assert progression.endless_record(s, "factory", "nightmare") == 0
+    assert s["challenges"].get("endless15")
+    # odměny počítají každého poraženého Kohouta
+    r2 = Run(RunConfig(mode="endless", seed=1))
+    r2.bosses_killed = ["zombie_rooster", "spy_fox", "zombie_rooster"]
+    rw = progression.compute_rewards(r2)
+    assert rw["gold"] == 1 + 2 * 2, rw
+    # starý save bez klíče rekordu se načte s výchozí hodnotou
+    from game.save import SaveData
+    old = os.path.join(TMP, "old_save.json")
+    with open(old, "w", encoding="utf-8") as f:
+        json.dump({"version": 1, "eggs": 5, "records": {"runs": 3}}, f)
+    sd = SaveData(old)
+    assert sd["records"]["best_time_endless"] == 0 and sd["records"]["runs"] == 3 and sd["eggs"] == 5
+
+
+@test
+def ultimates():
+    """Ultimátky: každé zvíře jinou (data + efekt + ikona + zvuk), aktivace v davu s renderem a HUD, pauza
+    uprostřed efektu, strop poškození bosse, smrt uprostřed efektu, oživení = ultimátka zdarma."""
+    from game import assets, scenarios as SC
+    from game.config import DT
+    from game.core.input import Joystick
+    from game.data.characters import CHAR_ORDER
+    from game.data.ultimates import ULT_BOSS_CAP, ULT_BY_CHAR, ULTIMATES
+    from game.ui import hud
+    from game.world.render import RunRenderer
+    from game.world.ultimates import EFFECTS
+    app()
+    assert set(ULT_BY_CHAR) == set(CHAR_ORDER)
+    assert len({ULT_BY_CHAR[c] for c in CHAR_ORDER}) == len(CHAR_ORDER), "každé zvíře má mít jinou ultimátku"
+    try:
+        from game.audio import synth
+        sounds = synth.sfx_library()
+    except ImportError:          # bez numpy hra běží potichu
+        sounds = None
+    for uid, u in ULTIMATES.items():
+        assert uid in EFFECTS, uid
+        assert u.icon in assets.icons.base, u.icon
+        assert sounds is None or u.sound in sounds, u.sound
+        assert u.name and u.short and u.desc and u.shout and u.kills > 0 and u.min_cd > 0
+    surf = pygame.Surface((540, 960))
+    joy = Joystick()
+    for c in CHAR_ORDER:
+        run, _sc = SC.make_run(f"ult_{c}", seed=4, headless=False)
+        ren = RunRenderer(run)
+        assert run.crow_ready and run.ult.id == ULT_BY_CHAR[c]
+        assert run.crow() and not run.crow_ready and run.crows_used == 1
+        for i in range(24):
+            tick(run, 0.5, 0.2)
+            ren.draw(surf, DT)
+            hud.draw_hud(surf, run, joy, i * DT)
+        # pauza uprostřed efektu: efekty stojí
+        st0 = [(f.kind, round(getattr(f, "t", 0.0), 4)) for f in run.ult_fx]
+        run.state = "paused"
+        for _ in range(30):
+            run.update(DT)
+        assert st0 == [(f.kind, round(getattr(f, "t", 0.0), 4)) for f in run.ult_fx], (c, "pauza")
+        run.state = "playing"
+        for i in range(420):
+            tick(run, 0.5, 0.2)
+            if i % 6 == 0:
+                ren.draw(surf, DT)
+        assert not run.ult_fx, (c, [f.kind for f in run.ult_fx])
+        assert run.ult_log[0].damage_dealt > 0, c
+        assert run.player.ult_speed == 1.0
+        # boss: jedna aktivace ubere nejvýš ULT_BOSS_CAP max. HP a souboj běží dál
+        rb, _sc = SC.make_run(f"ult_{c}_boss", seed=4)
+        rb.god = True
+        boss = rb.final_boss
+        for _ in range(100):
+            tick(rb)                     # konec úvodu bosse (během něj nebere poškození)
+        rb.crow_charge = rb.crow_cap = 1.0
+        assert rb.crow()
+        for _ in range(480):
+            tick(rb, 0.3, -0.2)
+        dealt = rb.ult_log[-1].boss_dmg.get(boss.e.id, 0.0)
+        assert dealt <= boss.e.max_hp * ULT_BOSS_CAP + 1, (c, dealt / boss.e.max_hp)
+        assert boss.e.alive and rb.final_boss is boss, c
+        # smrt uprostřed efektu: efekty skončí, oživení spustí ultimátku zdarma
+        rd, _sc = SC.make_run(f"ult_{c}", seed=5)
+        assert rd.crow()
+        for _ in range(10):
+            tick(rd)
+        rd.player.invuln = 0.0
+        rd.player.take_damage(1e9)
+        assert rd.state == "dying" and not rd.ult_fx and rd.player.ult_speed == 1.0, c
+        for _ in range(120):
+            rd.update(DT)
+        assert rd.state == "dead"
+        n_log = len(rd.ult_log)
+        rd.revive()
+        assert rd.state == "playing" and len(rd.ult_log) == n_log + 1 and rd.crows_used == 1, c
+        for _ in range(60):
+            tick(rd)
+
+
+@test
+def ultimates_regressions():
+    """Pasti na nálezy 7. kola: B-91 (rozestup ultimátky s Budíkem), B-93 + B-95 (okouzlení), B-94 (název),
+    B-96 (výbuch lišky zabité ultimátkou), B-98 (jméno zvířete v HUD)."""
+    import random as _r
+    from game import scenarios as SC
+    from game.config import DT
+    from game.data.characters import CHAR_ORDER
+    from game.data.ultimates import ULT_NAME_GAP, ULTIMATES
+    from game.world.run import Run, RunConfig
+    from game.world.ultimates import UltSource
+    app()
+    # B-91: Budík ani pasivka zvířete nestáhnou rozestup pod cd_floor, ten není kratší než omezení davu
+    for c in CHAR_ORDER:
+        run = Run(RunConfig(character=c, mode="full", seed=1, headless=True))
+        run.add_passive("clock", 5)
+        u = run.ult
+        assert u.cd_floor > 0 and run.ult_period() >= u.cd_floor - 1e-9, (c, run.ult_period())
+    assert ULTIMATES["kikiriki"].cd_floor >= ULTIMATES["kikiriki"].params["stun"], "omráčení delší než nabití"
+    elvis = Run(RunConfig(character="rooster", mode="full", seed=1, headless=True))
+    elvis.add_passive("clock", 5)
+    assert abs(elvis.ult_period() - 3.0) < 1e-6, elvis.ult_period()          # jako před ultimátkami
+    # B-93 + B-95: stráž drží odstup, po konci okouzlení je liška chvíli zmatená
+    run, _sc = SC.make_run("ult_peacock", seed=3)
+    run.director.update = lambda dt: None
+    p = run.player
+    p.stats.max_hp = p.hp = 1e6
+    assert run.crow()
+    seen_close, ended = 0, []
+    for i in range(int(5.6 / DT)):
+        tick(run)
+        for e in run.enemies:
+            if e.charm_t > 0 and e.foe is None and i > 150:
+                if (e.x - p.x) ** 2 + (e.y - p.y) ** 2 < 100 * 100:
+                    seen_close += 1
+        ended += [e for e in run.enemies if e.charm_t <= 0 and e.stun_t > 0.5]
+    assert ended, "po konci okouzlení má liška zmatení"
+    assert seen_close < 40, seen_close
+    # B-94: velký banner jen poprvé, další název nejdřív po ULT_NAME_GAP
+    run = Run(RunConfig(character="duck", mode="full", seed=2, headless=True))
+    run.crow(free=True)
+    n1 = sum(1 for b in run.banners if b[0] == run.ult.name)
+    run.time += 3.0
+    run.crow(free=True)
+    n2 = sum(1 for b in run.banners if b[0] == run.ult.name)
+    run.time += ULT_NAME_GAP
+    run.crow(free=True)
+    n3 = sum(1 for b in run.banners if b[0] == run.ult.name)
+    assert (n1, n2, n3) == (1, 1, 1), (n1, n2, n3)
+    assert any(t.text == run.ult.name for t in run.texts), "po prvním použití malý název u zvířete"
+    # B-96: liška zabitá ultimátkou vybuchne jen do lišek
+    run = Run(RunConfig(character="hen", mode="full", seed=2, headless=True))
+    e = run.spawn_enemy("exploder", run.player.x + 20, run.player.y)
+    run.kill_enemy(e, UltSource(run, run.ult, dict(run.ult.params)))
+    assert run.bombs and run.bombs[-1][4] == 0.0 and not run.bombs[-1][8], run.bombs
+    e2 = run.spawn_enemy("exploder", run.player.x + 20, run.player.y)
+    run.kill_enemy(e2, None)
+    assert run.bombs[-1][4] > 0 and run.bombs[-1][8], "výbuchy jinak zraňují dál"
+    # B-98: HUD ukazuje jméno zvířete i název ultimátky
+    from game.core.input import Joystick
+    from game.ui import hud
+    names = []
+    from game import assets
+    orig = assets.font.draw
+
+    def spy(surf_, text, *a, **k):
+        names.append(text)
+        return orig(surf_, text, *a, **k)
+    assets.font.draw = spy
+    try:
+        for c in CHAR_ORDER:
+            r_ = Run(RunConfig(character=c, mode="quick", seed=1))
+            hud.draw_hud(pygame.Surface((540, 960)), r_, Joystick(), 0.0)
+            assert hud._short_name(r_.char.name) in names and r_.ult.short in names, (c, names[-5:])
+    finally:
+        assets.font.draw = orig
+
+
+@test
+def ultimate_while_moving_and_beak_laser():
+    """Ultimátka jde zmáčknout i během pohybu: druhý prst (FINGERDOWN) na tlačítku, zatímco první drží joystick,
+    a na PC pravé tlačítko myši během tažení. Zobák-laser střílí ze zobáku (ne ze středu těla) na obě strany."""
+    a = app()
+    from game.config import DT, H, W
+    from game.scenes.game import GameScene, build_config
+    from game.ui import hud
+    gs = GameScene(a, build_config(a, "hen", "farm", "quick"))
+    a.set_scene(gs)
+    for _ in range(30):
+        a.step(DT)
+    run = gs.run
+
+    def send(e):
+        # stejná cesta jako App.process_events (překlad SDL události → scéna), bez fronty SDL – spolehlivé
+        # i v klasickém pygame 2.1 (Android), kde se atributy uměle poslaných událostí nemusí zachovat
+        ev = a.translate(e)
+        if ev is not None:
+            a.scene.handle(ev)
+
+    # první prst / levé tlačítko drží joystick a táhne
+    send(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(270, 700), button=1))
+    send(pygame.event.Event(pygame.MOUSEMOTION, pos=(330, 700), rel=(60, 0), buttons=(1, 0, 0)))
+    a.step(DT)
+    assert gs.joy.active and gs.joy.vx > 0.3, (gs.joy.active, gs.joy.vx)
+    # druhý prst na tlačítku ultimátky (SDL ho na myš nepřevede – přijde jen FINGERDOWN)
+    run.crow_charge = run.crow_cap = 1.0
+    cx, cy = hud.CROW_POS
+    send(pygame.event.Event(pygame.FINGERDOWN, touch_id=1, finger_id=2, x=cx / W, y=cy / H, dx=0.0, dy=0.0,
+                            pressure=1.0))
+    a.step(DT)
+    assert run.crows_used == 1, "druhým prstem se ultimátka nezmáčkla"
+    assert gs.joy.active, "joystick musí zůstat aktivní"
+    # PC: pravé tlačítko během tažení
+    run.crow_charge = run.crow_cap = 1.0
+    send(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(330, 700), button=3))
+    a.step(DT)
+    assert run.crows_used == 2, "pravé tlačítko myši ultimátku nespustilo"
+    send(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=(330, 700), button=1))
+    a.step(DT)
+    # Zobák-laser: paprsek začíná u zobáku, na straně, kam zvíře hledí, a nad středem těla
+    from game.data.characters import CHAR_ORDER
+    from game.world.run import Run, RunConfig
+    for c in CHAR_ORDER:
+        for face, side in ((0, 1), (1, -1)):
+            r = Run(RunConfig(character=c, mode="full", seed=1, headless=True))
+            r.director.update = lambda dt: None
+            r.weapons = []
+            w = r.add_weapon("laser", 4)
+            p = r.player
+            e = r.spawn_enemy("wolf", p.x + side * 170, p.y - 40)
+            e.hp = e.max_hp = 1e9
+            r.update(DT)
+            p.face = face
+            w.angles = w._dirs()
+            w._shoot(1.0)
+            (sx, sy), _end = r.beams[-1].pts
+            assert (sx, sy) == p.beak(), c
+            assert (sx - p.x) * side > 8 and sy < p.y - 15, (c, face, sx - p.x, sy - p.y)
+
+
+@test
+def fixed_joystick_anywhere():
+    """Pevný joystick: vznikne, kam hráč ťukne (kdekoli), střed se za prstem neposouvá, po puštění zmizí
+    a další ťuknutí ho vytvoří jinde. Pauza a ultimátka mají přednost před joystickem."""
+    a = app()
+    from game.config import DT
+    from game.scenes.base import Ev
+    from game.scenes.game import GameScene, build_config
+    from game.ui import hud
+    gs = GameScene(a, build_config(a, "duck", "farm", "quick"))
+    a.set_scene(gs)
+    for _ in range(10):
+        a.step(DT)
+    joy = gs.joy
+    # nahoře (dřív jen spodní 2/3)
+    gs.handle(Ev("down", 270, 140))
+    assert joy.active and (joy.ox, joy.oy) == (270, 140), (joy.active, joy.ox, joy.oy)
+    a.mouse_down = True
+    gs.handle(Ev("move", 270 + 400, 140))        # daleko za okraj
+    assert (joy.ox, joy.oy) == (270, 140), "střed se nesmí posouvat za prstem"
+    assert abs(joy.vx - 1.0) < 1e-6 and abs(joy.vy) < 1e-6, (joy.vx, joy.vy)
+    gs.handle(Ev("move", 270 - 20, 140))         # zpět dovnitř: páčka podle polohy prstu vůči pevnému středu
+    assert -0.3 < joy.vx < 0 and (joy.ox, joy.oy) == (270, 140), (joy.vx, joy.ox)
+    for _ in range(10):
+        a.step(DT)
+    assert gs.run.player.vx < 0, "zvíře jde ve směru páčky"
+    gs.handle(Ev("up", 250, 140))
+    a.mouse_down = False
+    assert not joy.active and joy.vx == 0 and joy.vy == 0
+    gs.handle(Ev("down", 100, 800))
+    assert joy.active and (joy.ox, joy.oy) == (100, 800), "nový joystick tam, kam se ťuklo"
+    gs.handle(Ev("up", 100, 800))
+    # tlačítka mají přednost
+    gs.run.crow_charge = gs.run.crow_cap = 1.0
+    cx, cy = hud.CROW_POS
+    gs.handle(Ev("down", cx, cy))
+    assert not joy.active and gs.crow_pressed, "ťuknutí na ultimátku nevytvoří joystick"
+    gs.handle(Ev("up", cx, cy))
+    gs.handle(Ev("down", *hud.PAUSE_RECT.center))
+    assert not joy.active and gs.overlay is not None, "ťuknutí na pauzu nevytvoří joystick"
 
 
 @test

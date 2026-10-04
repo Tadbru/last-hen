@@ -20,6 +20,11 @@ FUNNY_LOSS = [
     "Lišky slaví. Zatím.", "Příště to vyjde!", "Kurník čeká na odplatu.", "Slepice se nevzdává.",
     "Babička už chystá obvazy.", "Odveta bude za svítání.",
 ]
+# nový rekord Nekonečné noci – dřív sdílení po rekordu hlásilo „PADLA JSEM…“ s vtipem o prohře (B-85)
+FUNNY_RECORD = [
+    "Noc nekončí. Slepice taky ne.", "Slunce nevyšlo, rekord ano.", "Lišky už nevědí, co s ní.",
+    "Kohout zírá s otevřeným zobákem.",
+]
 
 
 def share_text(run) -> str:
@@ -27,10 +32,11 @@ def share_text(run) -> str:
     verb1 = "Přežila jsem" if f else "Přežil jsem"
     verb2 = "zabila" if f else "zabil"
     k = run.kills
-    return f"{verb1} {fmt_time(run.time)} a {verb2} {fmt_num(k)} {plural(k, 'lišku', 'lišky', 'lišek')}!"
+    where = " v Nekonečné noci" if getattr(run, "endless", False) else ""
+    return f"{verb1} {fmt_time(run.time)}{where} a {verb2} {fmt_num(k)} {plural(k, 'lišku', 'lišky', 'lišek')}!"
 
 
-def make_share_image(run, victory: bool) -> str:
+def make_share_image(run, victory: bool, record: bool = False) -> str:
     os.makedirs(SHARES_DIR, exist_ok=True)
     font = assets.font
     W, H = 540, 540
@@ -46,16 +52,20 @@ def make_share_image(run, victory: bool) -> str:
     big = pa.scale(img, 2)
     s.blit(pa.make_shadow(big.get_width(), 24, 90), (W // 2 - big.get_width() // 2, 248))
     s.blit(big, big.get_rect(midbottom=(W // 2, 262)))
-    head = "VÍTĚZSTVÍ!" if victory else "PADLA JSEM…" if run.char.female else "PADL JSEM…"
-    font.draw(s, head, (W // 2, 110), (255, 240, 200) if victory else (255, 140, 140), 4, "midtop", outline=C_OUTLINE)
+    if victory:
+        head, hcol, jokes = "VÍTĚZSTVÍ!", (255, 240, 200), FUNNY
+    elif record:
+        head, hcol, jokes = "NOVÝ REKORD!", (255, 214, 70), FUNNY_RECORD
+    else:
+        head, hcol, jokes = ("PADLA JSEM…" if run.char.female else "PADL JSEM…"), (255, 140, 140), FUNNY_LOSS
+    font.draw(s, head, (W // 2, 110), hcol, 4, "midtop", outline=C_OUTLINE)
     lines = font.wrap(share_text(run), W - 60, 3)
     y = 280
     for ln in lines:
         font.draw(s, ln, (W // 2, y), (255, 255, 255), 3, "midtop", outline=C_OUTLINE)
         y += 38
     import random
-    font.draw(s, random.choice(FUNNY if victory else FUNNY_LOSS), (W // 2, y + 4), (255, 230, 160), 2, "midtop",
-              outline=C_OUTLINE)
+    font.draw(s, random.choice(jokes), (W // 2, y + 4), (255, 230, 160), 2, "midtop", outline=C_OUTLINE)
     # build
     x = W // 2 - len(run.weapons) * 30
     for w in run.weapons:

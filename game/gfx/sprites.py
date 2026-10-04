@@ -174,6 +174,38 @@ PLAYER_MAPS = {
     "rooster": ROOSTER, "peacock": PEACOCK, "penguin": PENGUIN,
 }
 
+# Špička zobáku v mapě těla (art px, sloupec / řádek, postava hledí doprava) – odtud střílí Zobák-laser
+PLAYER_BEAK = {
+    "hen": (14, 4), "duck": (14, 4.5), "goose": (14, 2.5), "turkey": (14, 4),
+    "rooster": (13, 4), "peacock": (15, 3.5), "penguin": (10, 2.5),
+}
+_beak_cache: dict = {}
+
+
+def beak_offset(cid: str, face: int, lying: bool = False) -> tuple[float, float]:
+    """Posun špičky zobáku od pozice hráče (px) přesně podle toho, jak RunRenderer kreslí sprite:
+    obraz (w × h) s levým horním rohem v (x − w/2, y − h + 9). face 1 = zrcadleně, lying = klouzající tučňák
+    (sprite otočený o 90° hlavou ve směru jízdy). Počítá se z map, bez Surface – funguje i headless."""
+    key = (cid, face, lying)
+    v = _beak_cache.get(key)
+    if v is not None:
+        return v
+    spec = PLAYER_MAPS.get(cid, HEN)
+    body = pa.parse_map(spec["body"])
+    legs = pa.parse_map(spec["legs"][0]) if spec.get("legs") else []
+    rows = body + legs
+    w = (max(len(r) for r in rows) + 2) * PX           # +2 = automatický obrys
+    h = (len(rows) + 2) * PX
+    tx, ty = PLAYER_BEAK.get(cid, (len(body[0]) - 1, 3))
+    px, py = (tx + 1.5) * PX, (ty + 1.5) * PX            # střed pixelu v obrazu (včetně obrysu)
+    sign = 1.0 if face == 0 else -1.0
+    if lying:
+        v = (sign * (h / 2 - py), -w + 9 + px)
+    else:
+        v = (sign * (px - w / 2), -h + 9 + py)
+    _beak_cache[key] = v
+    return v
+
 # Skiny – doplňky přes hlavu (souřadnice relativně k hlavě postavy)
 SKIN_HATS = {
     "pirate": ("""
@@ -496,6 +528,12 @@ wWW....
 ...ttp.
 .yyrr..
 rrr....
+""", {}),
+    "feather_t": ("""
+.....yy
+...rrR.
+.rrRR..
+bRR....
 """, {}),
     "sound": ("""
 .q.

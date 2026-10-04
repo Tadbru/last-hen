@@ -35,7 +35,8 @@ DEFAULT: dict = {
     "meta": {"hp": 0, "dmg": 0, "speed": 0, "magnet": 0, "xp": 0, "reroll": 0},
     "records": {
         "best_time_quick": 0, "best_time_full": 0, "best_kills": 0, "total_kills": 0,
-        "runs": 0, "wins": 0, "boss_kills": 0, "max_level": 0, "total_eggs": 0,
+        "runs": 0, "wins": 0, "boss_kills": 0, "max_level": 0, "total_eggs": 0, "best_time_endless": 0,
+        "endless_best": {},          # rekord Nekonečné noci podle "mapa:obtížnost" (s)
     },
     "collection": {"enemies": [], "weapons": [], "evolutions": [], "bosses": [], "passives": []},
     "collection_rewards": [],

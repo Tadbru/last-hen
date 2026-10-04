@@ -490,6 +490,13 @@ class PauseOverlay(Overlay):
         pygame.draw.line(surf, (90, 70, 100), (r.x + 12, y - 10), (r.right - 12, y - 10), 2)
         for i, s_ in enumerate(stats):
             font.draw(surf, s_, (cols[i % 2], y + (i // 2) * 28), (215, 205, 225), 2, "topleft")
+        # ultimátka: ikona, název, kolikrát použita
+        u = run.ult
+        y = r.y + 438
+        ic = assets.icons.get(u.icon, 2)
+        surf.blit(ic, ic.get_rect(midleft=(cols[0], y + 10)))
+        font.draw(surf, font.fit(f"{u.name} · {run.crows_used}×", r.w - 60, 2), (cols[0] + 34, y), u.color, 2,
+                  "topleft", outline=C_OUTLINE)
         super().draw(surf)
 
 

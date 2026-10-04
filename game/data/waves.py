@@ -47,6 +47,40 @@ QUICK_TIME_SCALE = 1.8     # efektivní minuty = reálné × 1.8
 QUICK_LENGTH = 150         # boss přilétá ve 2:30
 FULL_LENGTH = 600
 
+# --- Nekonečná noc --------------------------------------------------------------------------------
+# 1. noc = přesně Plný mód. Po porážce Kohouta začne další noc: časy níže jsou v s od jeho porážky.
+ENDLESS_CYCLE = [(60, "spy_fox"), (120, "rabbit"), (180, "zombie_bear"), (240, "wolf_alpha"),
+                 (330, "zombie_rooster")]
+ENDLESS_ELITES = [(25, "giant_fox"), (55, "owl"), (90, "bear"), (115, "giant_fox"), (150, "owl"), (205, "bear"),
+                  (225, "giant_fox"), (265, "owl"), (290, "bear"), (310, "giant_fox")]
+ENDLESS_EVENT_FROM = 4.4    # formace od této minuty se po 9:30 opakují…
+ENDLESS_EVENT_REPEAT = 6.0  # …s posunem o 6 min (10:24, 11:24, … 16:24, …)
+ENDLESS_NIGHT_MIGHT = 0.04  # noční síla: +4 % poškození za level-up po dokončeném buildu (dřív 2 % – neznatelné, B-84)
+ENDLESS_HP_RAMP = 0.75      # po 10. minutě HP lišek roste lineárně o 75 % HP z 10. minuty za minutu (B-84)
+ENDLESS_ENRAGE = 150.0      # Kohout dalších nocí zuří po 2,5 min souboje (dřív 2 min – zeď, B-81; Plný mód 3 min)
+ENDLESS_MINI_MULT = 3.0     # HP mini-bossů ×3 za každou další noc
+ENDLESS_FINAL_MULT = 2.0    # HP Kohouta ×2 za každou další noc (dřív ×4 – nikdo ho ve 2. noci neporazil, B-81)
+ENDLESS_BOSS_GAP = 20.0     # od 2. noci přijde další boss nejdřív 20 s po porážce předchozího (B-82)
+ENDLESS_LATE_NIGHT_HP = 1.5 # od 3. noci HP lišek ×1,5 za každou noc – silný build jinak vydržel přes 45 min
+ENDLESS_DARK = 0.7          # osvětlení se zastaví před svítáním (0 = noc, 1 = den)
+
+
+def endless_boss_hp(night: int, final: bool = False) -> float:
+    """Násobič HP bossů v dalších nocích (1. noc = Plný mód)."""
+    if night <= 1:
+        return 1.0
+    return (ENDLESS_FINAL_MULT if final else ENDLESS_MINI_MULT) ** (night - 1)
+
+
+def endless_hp_mult(eff_min: float, night: int = 1) -> float:
+    """HP křivka nepřátel v Nekonečné noci: do 10. minuty přesně jako Plný mód, potom lineárně.
+    Kubická křivka Plného módu (+ dřívější přídavek 20 %/min) dělala z 15.–20. minuty zeď: ×18 HP za 10 min (B-84).
+    Od 3. noci přidává každá noc ×ENDLESS_LATE_NIGHT_HP, aby runy nekonečně netrvaly."""
+    if eff_min <= 10.0:
+        return hp_mult(eff_min)
+    late = ENDLESS_LATE_NIGHT_HP ** max(0, night - 2)
+    return hp_mult(10.0) * (1.0 + ENDLESS_HP_RAMP * (eff_min - 10.0)) * late
+
 
 def hp_mult(eff_min: float) -> float:
     return 1.0 + 0.2 * eff_min + 0.04 * eff_min ** 2 + 0.011 * eff_min ** 3

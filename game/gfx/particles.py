@@ -12,6 +12,17 @@ import random
 import pygame
 
 FEATHER, SPARK, PUFF, BLOB, STAR, ZZZ, FIRE, SMOKE, GLOW, DEBRIS, POP = range(11)
+HEART, FLAKE, NOTE, DROP, SHARD = range(11, 16)      # ultimátky: srdíčko, vločka, nota, kapka, střep ledu
+
+# pixel mapy malých částic ultimátek (# = barva, + = světlejší odlesk, - = tmavší spodek)
+_SHAPES = {
+    HEART: [".#.#.", "#+###", "#####", ".---.", "..-.."],
+    -HEART: [".#.#.", "#+.##", "##.##", ".-.-.", "..-.."],      # zlomené srdce (konec okouzlení)
+    FLAKE: ["..#..", "#.#.#", ".#+#.", "#.#.#", "..#.."],
+    NOTE: ["..##.", "..#.#", "..#..", "-##..", "--#.."],
+    DROP: [".#.", "+##", "###", ".-."],
+    SHARD: [".+.", "++#", "###", "#-#", ".-."],
+}
 
 G = 3                       # pixelová mřížka efektů (= PX, 1 art pixel)
 _ALPHA_STEPS = 6
@@ -130,6 +141,22 @@ class _SpriteCache:
         s.fill((*col, 255), (u, 0, u, u * 3))
         s.fill((*col, 255), (0, u, u * 3, u))
         s.fill((255, 255, 240, 255), (u, u, u, u))
+        return self._put(key, s)
+
+    def shape(self, kind: int, col, g: int) -> pygame.Surface:
+        """Malá pixelová částice podle mapy v _SHAPES (g = velikost art pixelu)."""
+        key = ("sh", kind, col, g)
+        s = self.d.get(key)
+        if s is not None:
+            return s
+        rows = _SHAPES[kind]
+        low = pygame.Surface((len(rows[0]), len(rows)), pygame.SRCALPHA)
+        hi, lo = _mix(col, (255, 255, 255), 0.55), _mul(col, 0.7)
+        for y, row in enumerate(rows):
+            for x, ch in enumerate(row):
+                if ch != ".":
+                    low.set_at((x, y), (*(hi if ch == "+" else lo if ch == "-" else col), 255))
+        s = pygame.transform.scale(low, (low.get_width() * g, low.get_height() * g))
         return self._put(key, s)
 
     def chunk(self, col, w: int, h: int) -> pygame.Surface:
@@ -429,6 +456,49 @@ class ParticleSystem:
             a = i * math.tau / n
             self.emit(x, y, math.cos(a) * speed, math.sin(a) * speed * 0.8 - 40, 0.55, STAR, col, 3)
 
+    # --- ultimátky ------------------------------------------------------------------------------
+    def hearts(self, x: float, y: float, n: int, speed: float = 90, broken: bool = False) -> None:
+        r = self.rng
+        col = (176, 150, 190) if broken else (255, 110, 180)
+        for _ in range(n):
+            a = r.uniform(math.pi * 1.15, math.pi * 1.85)
+            s = r.uniform(0.4, 1.0) * speed
+            self.emit(x + r.uniform(-6, 6), y, math.cos(a) * s, math.sin(a) * s, r.uniform(0.6, 1.0),
+                      HEART, col, -1 if broken else 1)
+
+    def flakes(self, x: float, y: float, n: int, speed: float = 120, spread: float = 8.0) -> None:
+        r = self.rng
+        for _ in range(self._n(n)):
+            a = r.uniform(0, math.tau)
+            s = r.uniform(0.3, 1.0) * speed
+            self.emit(x + r.uniform(-spread, spread), y + r.uniform(-spread, spread) * 0.7,
+                      math.cos(a) * s, math.sin(a) * s, r.uniform(0.6, 1.1), FLAKE,
+                      r.choice(((235, 248, 255), (190, 230, 255), (255, 255, 255))), 2 if r.random() < 0.6 else 3)
+
+    def notes(self, x: float, y: float, n: int, col=(255, 230, 120), speed: float = 110) -> None:
+        r = self.rng
+        for _ in range(n):
+            a = r.uniform(math.pi * 1.1, math.pi * 1.9)
+            s = r.uniform(0.5, 1.0) * speed
+            self.emit(x + r.uniform(-14, 14), y, math.cos(a) * s, math.sin(a) * s, r.uniform(0.7, 1.1), NOTE, col, 3)
+
+    def drops(self, x: float, y: float, n: int, col=(150, 220, 255), speed: float = 160, up: float = 120) -> None:
+        r = self.rng
+        for _ in range(self._n(n)):
+            a = r.uniform(0, math.tau)
+            s = r.uniform(0.3, 1.0) * speed
+            self.emit(x + r.uniform(-6, 6), y, math.cos(a) * s, math.sin(a) * s * 0.7 - up, r.uniform(0.35, 0.6),
+                      DROP, col, 3 if r.random() < 0.5 else 2)
+
+    def shards(self, x: float, y: float, n: int, spread: float = 60.0) -> None:
+        """Roztříštěný led: střepy rozlétající se do kruhu."""
+        r = self.rng
+        for i in range(self._n(n)):
+            a = i * math.tau / max(1, n) + r.uniform(-0.2, 0.2)
+            s = r.uniform(0.6, 1.0) * spread * 3.2
+            self.emit(x, y, math.cos(a) * s, math.sin(a) * s * 0.8 - 90, r.uniform(0.45, 0.7), SHARD,
+                      r.choice(((210, 240, 255), (160, 215, 250))), 3)
+
     def scorch(self, x: float, y: float, r: float, life: float = 4.0, kind: int = 0) -> None:
         if len(self.decals) >= MAX_DECALS:
             self.decals.pop(0)
@@ -467,11 +537,11 @@ class ParticleSystem:
                 continue
             L[i] = l
             k = K[i]
-            if k == FEATHER:
+            if k == FEATHER or k == FLAKE:
                 VX[i] *= drag_f
                 VY[i] = VY[i] * drag_f + 60 * dt
                 X[i] += (VX[i] + sin(l * 9.0) * 25) * dt
-            elif k == BLOB or k == DEBRIS:
+            elif k == BLOB or k == DEBRIS or k == DROP or k == SHARD:
                 VY[i] += 520 * dt
                 X[i] += VX[i] * dt
             elif k == SPARK:
@@ -587,6 +657,14 @@ class ParticleSystem:
                 img = cache.glow(S[i], C[i], t)
                 hw = img.get_width() // 2
                 add.append((img, (x - hw, y - hw)))
+            elif k >= HEART:
+                sz = S[i]
+                if k == HEART and sz < 0:
+                    img = cache.shape(-HEART, C[i], 2)
+                else:
+                    img = cache.shape(k, C[i], abs(sz) if k != HEART else 2 + (t > 0.5))
+                hw = img.get_width() // 2
+                ap((img, (x - hw, y - img.get_height() // 2)))
             elif k == POP:
                 rr = int(S[i] * (1.15 - t * 0.75)) // 2 * 2
                 if rr >= 2:
@@ -630,3 +708,8 @@ def cream_sprite(r: int, seed: int) -> pygame.Surface:
 
 def blit_add(surf, seq) -> None:
     _blit_add(surf, seq)
+
+
+def shape_sprite(kind: int, col, g: int = 3) -> pygame.Surface:
+    """Malý pixelový tvar částice (srdíčko, vločka, nota, kapka, střep) – pro renderer ultimátek."""
+    return _cache.shape(kind, col, g)

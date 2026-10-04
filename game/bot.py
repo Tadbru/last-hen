@@ -28,7 +28,7 @@ class Bot:
         threat = 0.0
         close = 0
         for e in run.grid.query(p.x, p.y, 240):
-            if not e.alive or e.prop:
+            if not e.alive or e.prop or e.charm_t > 0:      # okouzlené lišky (Diva) nejsou hrozba
                 continue
             dx, dy = p.x - e.x, p.y - e.y
             d2 = dx * dx + dy * dy + 1

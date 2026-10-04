@@ -5,7 +5,7 @@ import os
 import sys
 
 TITLE = "LAST CHICKEN"
-VERSION = "1.0.6"   # při buildu APK ji přepíše GitHub Actions (1.0.<číslo buildu>)
+VERSION = "1.1.0"   # při buildu APK ji přepíše GitHub Actions (1.0.<číslo buildu>)
 
 # Logické rozlišení (portrait). Vše se kreslí sem a škáluje do okna.
 W, H = 540, 960
@@ -55,3 +55,5 @@ class Flags:
     debug = False
     quick = False
     headless = False
+    scenario = ""           # ladicí scénář (game/scenarios.py)
+    seed = 1

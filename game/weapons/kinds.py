@@ -16,7 +16,7 @@ def _rot(name: str):
 
 
 class LobWeapon(Weapon):
-    """Vejce granát / Zlatá bomba – hod obloukem, výbuch při dopadu."""
+    """Vaječný granát / Zlatá bomba – hod obloukem, výbuch při dopadu."""
 
     def fire(self) -> bool:
         run = self.run
@@ -172,12 +172,17 @@ class LaserWeapon(Weapon):
         run.sfx("laser_charge", 0.5)
         return True
 
+    def _base_angle(self) -> float:
+        """Směr ze zobáku na nejbližší cíl (paprsek začíná u zobáku, ne uprostřed těla)."""
+        dx, dy, tgt = self.aim(self.s["range"])
+        if tgt is not None:
+            bx, by = self.run.player.beak()
+            return math.atan2(tgt.y - by, tgt.x - bx)
+        return math.atan2(dy, dx)
+
     def _dirs(self) -> list[float]:
-        run = self.run
-        p = run.player
         beams = int(self.s["beams"])
-        dx, dy, _ = self.aim(self.s["range"])
-        base = math.atan2(dy, dx)
+        base = self._base_angle()
         spread = 0.16 if not self.s.get("sweep") else 0.35
         return [base + (i - (beams - 1) / 2) * spread for i in range(beams)]
 
@@ -188,7 +193,8 @@ class LaserWeapon(Weapon):
         if self.charging > 0:
             self.charging -= dt
             if run.tick % 3 == 0:
-                run.particles.sparks(p.x + p.dir_x * 14, p.y - 14, 1, self.d.color, 60, 0.2)
+                bx, by = p.beak()
+                run.particles.sparks(bx, by, 1, self.d.color, 60, 0.2)
             if self.charging <= 0:
                 self.angles = self._dirs()
                 if s.get("sweep"):
@@ -201,8 +207,7 @@ class LaserWeapon(Weapon):
         if self.active > 0:
             self.active -= dt
             # Oči sokola: paprsky sledují nejbližší cíl a kmitají kolem něj
-            dx, dy, tgt = self.aim(s["range"])
-            base = math.atan2(dy, dx)
+            base = self._base_angle()
             n = len(self.angles)
             wob = math.sin(self.active * 6) * 0.3
             self.angles = [base + wob + (i - (n - 1) / 2) * 0.35 for i in range(n)]
@@ -221,7 +226,7 @@ class LaserWeapon(Weapon):
         s = self.s
         ln = self.area(s["range"])
         w = self.area(s["width"])
-        sx, sy = p.x + p.dir_x * 8, p.y - 14
+        sx, sy = p.beak()                   # paprsek ze zobáku (dřív ze středu těla)
         for a in self.angles:
             ex, ey = sx + math.cos(a) * ln, sy + math.sin(a) * ln
             for e in run.enemies_on_segment(sx, sy, ex, ey, w / 2):
@@ -448,7 +453,7 @@ class GunWeapon(Weapon):
 
 
 class WhipWeapon(Weapon):
-    """Zobák-šleh / Husí hněv."""
+    """Husí štípanec / Husí hněv."""
 
     def fire(self) -> bool:
         run = self.run
@@ -560,7 +565,7 @@ class WavesWeapon(Weapon):
 
 
 class FanWeapon(Weapon):
-    """Ocas-vějíř / Duhová show."""
+    """Páví vějíř / Duhová show."""
 
     COLORS = [(44, 172, 160), (82, 142, 232), (252, 216, 64), (168, 82, 204), (226, 48, 52)]
 

@@ -17,11 +17,13 @@ from ..data.characters import CHARACTERS
 from ..data.enemies import ENEMIES
 from ..data.meta import DIFFICULTIES
 from ..data.passives import MAX_PASSIVE_LEVEL
+from ..data.ultimates import ULT_CLOCK_MIN, ULT_CLOCK_STEP, ULT_START, ult_for
 from ..data.weapons import MAX_WEAPON_LEVEL, WEAPONS
 from ..gfx import pixelart as pa
 from ..gfx.particles import ParticleSystem
 from ..gfx.sprites import Anim
 from ..weapons.base import make_weapon
+from . import ultimates as ULT
 from .bosses import make_boss_ctrl, tinted_anim
 from .director import Director
 from .enemies import update_enemies
@@ -33,8 +35,6 @@ from .player import Player
 ARENA_R = 430.0
 FLASH_GAP = 2.0            # min. rozestup běžných záblesků (s)
 PLAYER_FX_CAP = 0.3        # strop třesu od vlastních zbraní (offset ≈ 1 px)
-CROW_KILLS = 70
-CROW_MIN_CD = 6.0           # nejkratší doba nabití kokrhání (s) – v pozdní hře se dřív nabilo za 1–3 s (B-73)
 
 
 # Ladění délky módů (4. kolo reportu)
@@ -54,7 +54,7 @@ BIG_FLASH_GAP = 0.35        # …nejvýš jednou za tuto dobu → při trvalé p
 class RunConfig:
     character: str = "hen"
     biome: str = "farm"
-    mode: str = "quick"              # quick | full | daily | bossrush
+    mode: str = "quick"              # quick | full | daily | bossrush | endless
     difficulty: str = "normal"
     seed: int = 0
     modifiers: tuple = ()
@@ -65,6 +65,8 @@ class RunConfig:
     skin: str | None = None
     season: str | None = None
     headless: bool = False
+    record: float = 0.0              # Nekonečná noc: dosavadní rekord (s) pro HUD
+    ult: str | None = None           # ladění/měření: jiná ultimátka než ta zvířete (None = podle zvířete)
 
 
 class Wave:
@@ -108,6 +110,9 @@ class Run:
         self.xp_mult = (QUICK_XP if quick else 1.0) * (1.25 if "horde" in mods else 1.0) \
             * (1.3 if "giants" in mods else 1.0)
         self.card_luck = QUICK_CARD_LUCK if quick else 1.0
+        self.endless = cfg.mode == "endless"
+        self.night_power = 0            # Nekonečná noc: level-upy po dokončeném buildu (+síla)
+        self.record_beaten = False      # Nekonečná noc: rekord už byl během runu překonán (banner jen jednou)
         self.time = 0.0
         self.tick = 0
         self.state = "playing"
@@ -152,8 +157,15 @@ class Run:
         self.banished: set[str] = set()
         self.kills = 0
         self.coins = 0
-        self.crow_charge = 0.0
-        self.crow_cap = 1.0             # strop nabití – po kokrhání roste od 0 rychlostí 1/CROW_MIN_CD
+        # ultimátka zvířete (dřív společné kokrhání) – data v data/ultimates.py, efekty ve world/ultimates.py
+        self.ult = ult_for(cfg.character, cfg.ult)
+        self.ult_fx: list = []          # běžící efekty ultimátek
+        self.ult_log: list = []         # zdroje posledních aktivací (poškození, zabití – měření)
+        self.charm = None               # parametry okouzlení Divy (zdroj, úder, % HP, rozestup, dosah, stráž, zmatení)
+        self.ult_named = False          # velký banner s názvem ultimátky už byl (B-94)
+        self.ult_name_t = -1e9          # kdy se název ultimátky ukázal naposledy
+        self.crow_charge = ULT_START    # napůl nabitá – první ultimátka přijde už v první minutě
+        self.crow_cap = 1.0             # strop nabití – po použití roste od 0 za ult.min_cd s (B-73)
         self.crows_used = 0
         self.crits = 0
         self.max_burst = 0
@@ -301,7 +313,8 @@ class Run:
     def spawn_enemy(self, eid: str, x: float, y: float, summoned: bool = False):
         d = ENEMIES[eid]
         em = self.director.eff_min()
-        hp = d.hp * WV.hp_mult(em) * self.diff.hp * self.biome.hp_mult * self.mod_enemy_hp
+        curve = WV.endless_hp_mult(em, self.director.night) if self.endless else WV.hp_mult(em)
+        hp = d.hp * curve * self.diff.hp * self.biome.hp_mult * self.mod_enemy_hp
         if d.elite:
             hp *= 1 + em * 0.08
         speed = d.speed * self.rng.uniform(0.88, 1.12) * self.mod_enemy_speed
@@ -363,6 +376,8 @@ class Run:
             bdmg *= 0.8
         if self.cfg.mode == "bossrush":
             hp *= 0.75
+        if self.endless:
+            hp *= WV.endless_boss_hp(self.director.night, final)
         if final:
             # aréna kolem hráče
             self.arena = (p.x, p.y, ARENA_R)
@@ -425,7 +440,8 @@ class Run:
             # finále začíná s plnými silami
             p.heal(p.stats.max_hp)
             self.crow_charge = self.crow_cap = 1.0
-            self.add_text(p.x, p.y - 50, "Svítá! Plné síly!", (255, 230, 140), 2, 2.0)
+            self.add_text(p.x, p.y - 50, "Plné síly!" if self.endless else "Svítá! Plné síly!", (255, 230, 140),
+                          2, 2.0)
             self.particles.stars(p.x, p.y - 20, 12, (255, 230, 120))
             if not self.headless and assets.audio:
                 assets.audio.play_music("boss", 1.0)
@@ -453,6 +469,18 @@ class Run:
         self.camera.vibrate(16)
         self.camera.haptic(120)
         self.coins += 25 if bid != "zombie_rooster" else 100
+        if ctrl is self.final_boss and self.endless:
+            # Nekonečná noc: slunce nevyjde – Kohout nechá bednu a začne další noc
+            self.final_boss = None
+            self.arena = None
+            self.director.next_night()
+            self.pickups.append(Pickup(e.x, e.y, P_CHEST, 2))
+            self.banner(f"NOC {self.director.night}", (190, 150, 255), 3.0)
+            self.banner("Slunce nevyšlo…", (220, 210, 240), 3.0)
+            self.sfx("fanfare")
+            if not self.headless and assets.audio:
+                assets.audio.play_music(self.biome.music, 1.0)
+            return
         if ctrl is self.final_boss or (self.cfg.mode == "bossrush" and not self.director.rush and not self.bosses):
             self.final_boss = None
             self.arena = None
@@ -464,6 +492,7 @@ class Run:
             self.bombs = []
             self.eprojs = []
             self.waves = [w for w in self.waves if not w.hurt_player]
+            ULT.stop_all(self)
             self.player.invuln = 999.0
             self.sfx("victory")
             self.banner("SLUNCE VYCHÁZÍ!", (255, 220, 120), 3.0)
@@ -472,6 +501,8 @@ class Run:
             self.banner("Boss poražen!", (255, 214, 70), 2.0)
             if self.cfg.mode == "bossrush":
                 self._boss_xp(e.x, e.y)
+            if self.endless:
+                self.director.boss_down()       # oddech před dalším bossem noci (B-82)
             self.sfx("fanfare")
 
     def recycle_enemy(self, e) -> None:
@@ -530,6 +561,8 @@ class Run:
                     e.spr = assets.sprites.enemies["armored_fox_broken"]
         if e.ctrl is not None:
             dmg = e.ctrl.modify_damage(dmg)
+        if e.boss and src is not None and type(src) is ULT.UltSource:
+            dmg = src.cap_boss(e, dmg)          # ultimátka nepřeskočí souboj s bossem
         if dmg > 0:
             e.hp -= dmg
             if not flash:
@@ -599,7 +632,7 @@ class Run:
             return
         self.kills += 1
         self._kills_tick += 1
-        self.crow_charge = min(self.crow_cap, self.crow_charge + self.player.stats.crow_mult / CROW_KILLS)
+        self.crow_charge = min(self.crow_cap, self.crow_charge + self.player.stats.crow_mult / self.ult.kills)
         self.discovered["enemies"].add(e.d.id)
         if src is not None:
             src.kills += 1
@@ -609,7 +642,11 @@ class Run:
             if s.get("coin") and self.rng.random() < s["coin"]:
                 self.pickups.append(Pickup(e.x, e.y, P_COIN, 1))
         if e.xp:
-            self.drop_xp(e.x, e.y, e.xp)
+            xp = e.xp
+            if src is not None and src.s.get("xp_bonus"):
+                xp *= 1 + src.s["xp_bonus"]         # Zlatá nadílka: liška zabitá zlatým vejcem dá víc XP
+                self.particles.sparkle(e.x, e.y - 10, (255, 214, 70), 2)
+            self.drop_xp(e.x, e.y, xp)
         r = self.rng.random()
         if r < 0.006:
             self.pickups.append(Pickup(e.x + 8, e.y, P_WORM, 1))
@@ -622,8 +659,11 @@ class Run:
             self.sfx("roar", 0.4)
         if e.d.explode or "explosive" in self.mods:
             rr = e.d.explode or 50
-            self.bombs.append([e.x, e.y, 0.6, rr, e.dmg * 1.0, 30 * self.player.stats.might, None,
-                               (255, 120, 40), True])
+            # liška zabitá ultimátkou vybuchne jen do lišek – hráč nemá dostat zásah od vlastní ultimátky (B-96);
+            # výbuch nese ultimátku jako zdroj, takže neškodný je i řetěz dalších explodujících lišek
+            by_ult = src is not None and type(src) is ULT.UltSource
+            self.bombs.append([e.x, e.y, 0.6, rr, 0.0 if by_ult else e.dmg * 1.0, 30 * self.player.stats.might,
+                               src if by_ult else None, (255, 120, 40), not by_ult])
         if not e.summoned:
             self.corpses.append((e.x, e.y))
         self.particles.pop(e.x, e.y - 8, e.d.fluff, 4 if len(self.particles) < 450 else 1)
@@ -727,7 +767,7 @@ class Run:
         md2 = max_d * max_d
         cand = []
         for e in buf:
-            if e.alive and not e.prop and e.alpha >= 128:
+            if e.alive and not e.prop and e.alpha >= 128 and e.charm_t <= 0:
                 d2 = (e.x - x) ** 2 + (e.y - y) ** 2
                 if d2 < md2:
                     cand.append((d2, e))
@@ -881,13 +921,14 @@ class Run:
             self.particles.burst_ring(p.x, p.y - 14, 10, (255, 220, 110), 170)
 
     # =====================================================================================
-    # KOKRHÁNÍ
+    # ULTIMÁTKA (dřív kokrhání) – efekty ve world/ultimates.py
     # =====================================================================================
     @property
     def crow_ready(self) -> bool:
         return self.crow_charge >= 1.0
 
     def crow(self, free: bool = False) -> bool:
+        """Ultimátka zvířete (historicky „kokrhání“). free = zdarma (oživení), bez odečtení nabití."""
         if self.state != "playing":
             return False
         if not free and not self.crow_ready:
@@ -896,32 +937,15 @@ class Run:
             self.crow_charge = 0.0
             self.crow_cap = 0.0
             self.crows_used += 1
-        p = self.player
-        st = p.stats
-        r = 290 * st.area
-        self.add_wave(p.x, p.y, 20, r, 0.45, 40 * st.might, None, kb=560, stun=2.2, color=(255, 230, 120),
-                      follow=True).crit = False
-        self.add_ring(p.x, p.y, 10, r * 1.1, 0.6, (255, 255, 255), 10)
-        for ep in self.eprojs:
-            if (ep.x - p.x) ** 2 + (ep.y - p.y) ** 2 < r * r:
-                ep.alive = False
-                self.particles.sparks(ep.x, ep.y, 3, (255, 255, 200), 100)
-        # bonus damage podle max HP běžných nepřátel
-        for e in self.grid.query(p.x, p.y, r):
-            if e.alive and not e.boss and (e.x - p.x) ** 2 + (e.y - p.y) ** 2 < r * r:
-                self.damage_enemy(e, e.max_hp * 0.25, None, crit=False)
-        p.invuln = max(p.invuln, 1.0)
-        self.flash((255, 250, 220), 0.15)
-        self.shake(0.6)
-        self.camera.vibrate(14)
-        self.particles.stars(p.x, p.y - 20, 16, (255, 230, 90), 280)
-        self.particles.glow(p.x, p.y - 14, 60, (255, 210, 110), 0.25)
-        self.add_text(p.x, p.y - 60, "KIKIRIKÍ!", (255, 230, 90), 4, 1.2)
-        self.sfx("crow", 1.0)
-        if self.final_boss is not None and isinstance(getattr(self.final_boss, "wind", None), float):
-            self.final_boss.wind = 0.0
-            self.final_boss.inhale = 0.0
+        ULT.activate(self, self.ult)
         return True
+
+    def ult_period(self) -> float:
+        """Nejkratší rozestup dvou použití: doba nabití ultimátky zkrácená Budíkem (−8 %/úr., nejvýš −40 %)
+        a pasivkou zvířete (Elvis 2×), ale nikdy pod `cd_floor` – dřív Elvis s Budíkem kokrhal každých 1,8 s
+        a omráčení 2,2 s drželo lišky trvale na místě (B-91)."""
+        clock = max(ULT_CLOCK_MIN, 1.0 - ULT_CLOCK_STEP * self.passives.get("clock", 0))
+        return max(self.ult.cd_floor, self.ult.min_cd * clock / self.player.stats.crow_mult)
 
     # =====================================================================================
     # ARÉNA
@@ -979,8 +1003,13 @@ class Run:
         self.tick += 1
         self.time += dt
         self.flash_cd = max(0.0, self.flash_cd - real_dt)
+        if self.endless and not self.record_beaten and self.cfg.record and self.time > self.cfg.record:
+            # okamžik překonání rekordu – dřív se jen tiše změnil text v HUD (B-85)
+            self.record_beaten = True
+            self.banner("NOVÝ REKORD!", (255, 214, 70), 2.5)
+            self.sfx("fanfare")
         if self.crow_cap < 1.0:
-            self.crow_cap = min(1.0, self.crow_cap + dt * self.player.stats.crow_mult / CROW_MIN_CD)
+            self.crow_cap = min(1.0, self.crow_cap + dt / self.ult_period())
         if crow:
             self.crow()
 
@@ -1012,6 +1041,7 @@ class Run:
 
         for w in self.weapons:
             w.update(dt)
+        ULT.update(self, dt)
         for a in self.allies:
             if a.alive:
                 a.update(dt)
@@ -1073,6 +1103,12 @@ class Run:
             self.pending_levelups = 0
             p = self.player
             p.heal(p.stats.max_hp * progression.HEAL_FILL * n)
+            if self.endless:
+                # noční síla: v nekonečném módu roste síla dál i s hotovým buildem
+                self.night_power += n
+                p.recompute()
+                self.add_text(p.x, p.y - 70, f"Noční síla +{round(WV.ENDLESS_NIGHT_MIGHT * 100 * n)} %",
+                              (190, 150, 255), 2, 1.4)
             self.add_text(p.x, p.y - 46, f"Úr. {self.level}  +zdraví", (120, 255, 140), 2, 1.2)
             self.particles.stars(p.x, p.y - 20, 6, (120, 255, 140), 90)
             self.particles.glow(p.x, p.y - 14, 34, (90, 200, 110), 0.2)
@@ -1116,6 +1152,7 @@ class Run:
             return
         self.state = "dying"
         self.state_t = 1.4
+        ULT.stop_all(self)
         p = self.player
         self.particles.feathers(p.x, p.y, 40, (250, 248, 240), 260)
         self.particles.glow(p.x, p.y - 12, 70, (255, 240, 220), 0.3)
@@ -1440,5 +1477,5 @@ class Run:
 
 
 def _targetable(o) -> bool:
-    """Cíl auto-aimu: živý nepřítel, ne sud, ne neviditelný boss (Pan Liška Špión v mlze)."""
-    return not o.prop and o.alive and o.alpha >= 128
+    """Cíl auto-aimu: živý nepřítel, ne sud, ne neviditelný boss (Pan Liška Špión v mlze), ne liška okouzlená Divou."""
+    return not o.prop and o.alive and o.alpha >= 128 and o.charm_t <= 0

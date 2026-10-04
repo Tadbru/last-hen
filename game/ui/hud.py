@@ -1,4 +1,4 @@
-"""HUD během runu: XP bar, časovač do svítání, zabití, mince, zbraně, boss bar, kokrhání, joystick, bannery."""
+"""HUD během runu: XP bar, časovač do svítání, zabití, mince, zbraně, boss bar, ultimátka, joystick, bannery."""
 from __future__ import annotations
 
 import math
@@ -8,7 +8,7 @@ import pygame
 from .. import assets
 from ..config import C_GOLD, C_OUTLINE, C_TEXT, H, W
 from ..data.passives import PASSIVES
-from ..util import clamp, fmt_num, fmt_time
+from ..util import clamp, fmt_num, fmt_time, lerp_color, mul_color
 from ..gfx.particles import blit_add, glow_sprite
 from .widgets import Ghost, draw_bar
 
@@ -53,7 +53,20 @@ def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
             font.draw(surf, f"×{len(run.pending_chests)}", (px + ci.get_width() + 3, 22), C_GOLD, 2, "topleft",
                       outline=C_OUTLINE)
     # časovač
-    if run.final_boss is not None:
+    if run.endless:
+        # Nekonečná noc: čas, noc a rekord i během Kohouta – dřív je přepsalo „BOSS!“ a runy končí právě tam (B-83)
+        font.draw(surf, fmt_time(run.time), (W // 2, 22), C_TEXT, 4, "midtop", outline=C_OUTLINE)
+        rec = run.cfg.record
+        boss = "BOSS! · " if run.final_boss is not None else ""
+        if rec and run.time > rec:
+            a = int(190 + 65 * math.sin(t * 6))
+            font.draw(surf, f"{boss}NOVÝ REKORD!", (W // 2, 60), C_GOLD, 2, "midtop", outline=C_OUTLINE, alpha=a)
+        else:
+            # první run na mapě a obtížnosti: rekord teprve vzniká (B-85)
+            info = f"{boss}Noc {run.director.night} · " + (f"rekord {fmt_time(rec)}" if rec else "první rekord")
+            col = (255, 110, 100) if boss else (200, 180, 240)
+            font.draw(surf, info, (W // 2, 60), col, 2, "midtop", outline=C_OUTLINE)
+    elif run.final_boss is not None:
         font.draw(surf, "BOSS!", (W // 2, 22), (255, 90, 80), 4, "midtop", outline=C_OUTLINE)
     elif run.cfg.mode == "bossrush":
         font.draw(surf, fmt_time(run.time), (W // 2, 22), C_TEXT, 4, "midtop", outline=C_OUTLINE)
@@ -121,7 +134,7 @@ def draw_hud(surf, run, joy, t: float, debug: dict | None = None) -> None:
         by += 46
     # ukazatele bossů mimo obrazovku
     _boss_arrows(surf, run, t)
-    # kokrhání
+    # ultimátka
     _crow_button(surf, run, t)
     # joystick
     if joy.alpha > 0.02:
@@ -180,27 +193,58 @@ def _slot(surf, x, y, icon, lv, evo, maxlv=8) -> None:
 
 
 def _crow_button(surf, run, t: float) -> None:
+    """Tlačítko ultimátky: ikona a název ultimátky zvířete, oblouk nabití v její barvě, při plném nabití pulzuje."""
     cx, cy = CROW_POS
     r = CROW_R
+    ult = run.ult
     ready = run.crow_ready
+    col = ult.color
+    if _btn["run"] != id(run):
+        _btn["run"], _btn["used"] = id(run), run.crows_used
+    elif _btn["used"] != run.crows_used:
+        _btn["used"] = run.crows_used
+        _btn["pop"] = t                       # právě použito → krátký „výstřel“ z tlačítka
+    pop = t - _btn["pop"]
     pygame.draw.circle(surf, (14, 8, 18), (cx, cy + 5), r + 3)
-    col = (234, 150, 40) if ready else (70, 52, 76)
     if ready:
         k = 0.5 + 0.5 * math.sin(t * 7)
-        gl = glow_sprite(22, (150, 90, 30), 0.6 + 0.4 * k)
+        gl = glow_sprite(22, mul_color(col, 0.6), 0.6 + 0.4 * k)
         blit_add(surf, [(gl, (cx - gl.get_width() // 2, cy - gl.get_height() // 2))])
-        pygame.draw.circle(surf, (255, 230, 120), (cx, cy), int(r + 6 + 4 * k), 3)
+        pygame.draw.circle(surf, lerp_color(col, (255, 255, 255), 0.45), (cx, cy), int(r + 6 + 4 * k), 3)
     pygame.draw.circle(surf, C_OUTLINE, (cx, cy), r + 3)
-    pygame.draw.circle(surf, col, (cx, cy), r)
+    # připraveno: tmavší výplň v barvě ultimátky, ať ikona nesplývá (B-89); barva hlavně v záři, kroužku a nápisu
+    pygame.draw.circle(surf, mul_color(col, 0.5) if ready else (70, 52, 76), (cx, cy), r)
+    if ready:
+        pygame.draw.circle(surf, col, (cx, cy), r - 2, 4)
+        pygame.draw.circle(surf, lerp_color(col, (255, 255, 255), 0.5), (cx, cy), r - 6, 2)   # odlesk
     # nabití
     ch = run.crow_charge
     if ch > 0 and not ready:
         rect = pygame.Rect(cx - r + 4, cy - r + 4, (r - 4) * 2, (r - 4) * 2)
-        pygame.draw.arc(surf, (255, 200, 80), rect, math.pi / 2, math.pi / 2 + math.tau * ch, 6)
-    icon = assets.icons.get("crow", 5 if ready else 4)      # barevná i během nabíjení (dřív šedý obrys)
+        pygame.draw.arc(surf, col, rect, math.pi / 2, math.pi / 2 + math.tau * ch, 6)
+    if 0 <= pop < 0.35:
+        q = pop / 0.35
+        pygame.draw.circle(surf, lerp_color((255, 255, 255), col, q), (cx, cy), int(r + 4 + 40 * q), max(1, int(6 * (1 - q))))
+    icon = assets.icons.get(ult.icon, 5 if ready else 4)     # barevná i během nabíjení
     surf.blit(icon, icon.get_rect(center=(cx, cy - 2)))
+    # jméno zvířete nad tlačítkem – čí ultimátka to je (zadání: „ikona a název zvířete“, B-98)
+    assets.font.draw(surf, _short_name(run.char.name), (cx, cy - r - 8), run.char.color, 2, "midbottom",
+                     outline=C_OUTLINE, alpha=255 if ready else 190)
     if ready:
-        assets.font.draw(surf, "KOKRHEJ!", (cx, cy + r + 2), (255, 230, 120), 2, "midtop", outline=C_OUTLINE)
+        a = int(200 + 55 * math.sin(t * 7))
+        assets.font.draw(surf, ult.short + "!", (cx, cy + r + 2), lerp_color(col, (255, 255, 255), 0.35), 2, "midtop",
+                         outline=C_OUTLINE, alpha=a)
+    else:
+        assets.font.draw(surf, ult.short, (cx, cy + r + 2), (170, 160, 175), 2, "midtop", outline=C_OUTLINE)
+
+
+_btn = {"run": 0, "used": 0, "pop": -9.0}
+
+
+def _short_name(name: str) -> str:
+    """„Slepice Božena“ → „Božena“, „Tajný tučňák“ → „Tučňák“."""
+    w = name.split()[-1]
+    return w[:1].upper() + w[1:]
 
 
 def crow_hit(x: float, y: float) -> bool:

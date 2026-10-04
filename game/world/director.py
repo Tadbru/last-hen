@@ -20,6 +20,8 @@ class Director:
         self.run = run
         mode = run.cfg.mode
         self.quick = mode in ("quick", "daily")
+        self.endless = mode == "endless"
+        self.night = 1                  # Nekonečná noc: pořadí noci (kola bossů)
         self.time_scale = WV.QUICK_TIME_SCALE if self.quick else 1.0
         self.acc = 0.0
         if mode == "bossrush":
@@ -31,6 +33,10 @@ class Director:
             self.rush = []
         self.elites = list(WV.ELITES_QUICK if self.quick else WV.ELITES_FULL)
         self.events = list(WV.EVENTS)
+        if self.endless:
+            rep = [ev for ev in WV.EVENTS if ev[0] >= WV.ENDLESS_EVENT_FROM]
+            for k in range(1, 20):
+                self.events += [(m + k * WV.ENDLESS_EVENT_REPEAT, kind, eid, n) for m, kind, eid, n in rep]
         self.final_time = WV.QUICK_LENGTH if self.quick else WV.FULL_LENGTH
         if mode == "bossrush":
             self.final_time = 0
@@ -110,8 +116,10 @@ class Director:
                 run.spawn_enemy(self.pick(weights, em), x, y)
                 alive += 1
         # formace
-        while self.events and em >= self.events[0][0] and run.final_boss is None:
+        while self.events and em >= self.events[0][0] and (run.final_boss is None or self.endless):
             _, kind, eid, count = self.events.pop(0)
+            if run.final_boss is not None:
+                continue        # Nekonečná noc: formace během souboje s Kohoutem propadnou (nepřijdou naráz po něm)
             if run.cfg.mode != "bossrush":
                 self.formation(kind, eid, int(count * min(1.5, self.spawn_mult)), weights, em)
         # elity
@@ -124,8 +132,25 @@ class Director:
                 run.sfx("warning", 0.6)
         # bossové
         while self.bosses and t >= self.bosses[0][0]:
+            if self.endless and self.night > 1 and any(c.e.alive for c in run.bosses):
+                break       # Nekonečná noc: další boss počká na porážku předchozího – dřív se hromadili (B-82)
             _, bid = self.bosses.pop(0)
             run.spawn_boss(bid)
+
+    def boss_down(self) -> None:
+        """Nekonečná noc (od 2. noci): po porážce bosse oddech – zbytek rozpisu se posune nejméně o ENDLESS_BOSS_GAP."""
+        if not (self.endless and self.night > 1 and self.bosses):
+            return
+        shift = self.run.time + WV.ENDLESS_BOSS_GAP - self.bosses[0][0]
+        if shift > 0:
+            self.bosses = [(bt + shift, bid) for bt, bid in self.bosses]
+
+    def next_night(self) -> None:
+        """Nekonečná noc: Kohout padl, slunce nevyšlo – naplánovat další kolo bossů a elit od teď."""
+        t = self.run.time
+        self.night += 1
+        self.bosses = [(t + dt, bid) for dt, bid in WV.ENDLESS_CYCLE]
+        self.elites = [(t + dt, eid) for dt, eid in WV.ENDLESS_ELITES]
 
     def _bossrush(self, dt: float) -> None:
         run = self.run

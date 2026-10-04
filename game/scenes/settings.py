@@ -110,7 +110,7 @@ class SettingsScene(Scene):
             font.draw(surf, label, (34, y + 29), C_TEXT, 2, "midleft")
         font.draw(surf, "Sezónní téma", (34, self.season_y + 29), C_TEXT, 2, "midleft")
         tip = ("Tlačítko Zpět = pauza / návrat" if device.MOBILE
-               else "Mezerník = kokrhání · F11 = celá obrazovka")
+               else "Mezerník = ultimátka · F11 = celá obrazovka")
         font.draw(surf, tip, (W // 2, 926), (170, 160, 180), 2, "midtop")
         _ = pygame
         self.draw_buttons(surf)

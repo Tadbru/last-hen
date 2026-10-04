@@ -19,7 +19,8 @@ class Enemy:
     __slots__ = ("d", "id", "x", "y", "kx", "ky", "hp", "max_hp", "speed", "dmg", "r", "xp", "alive",
                  "flash", "flash_cd", "slow_t", "slow_f", "stun_t", "hyp_t", "freeze_t", "anim", "face", "armor",
                  "ctrl", "elite", "boss", "prop", "flyer", "touch_cd", "t", "cd", "state", "spr", "kb_res",
-                 "ai", "tint", "alpha", "cell", "bob", "summoned", "fuse", "hx", "hy", "rage", "chest")
+                 "ai", "tint", "alpha", "cell", "bob", "summoned", "fuse", "hx", "hy", "rage", "chest",
+                 "charm_t", "foe")
 
     def __init__(self, d, x: float, y: float, hp: float, speed: float, dmg: float, spr) -> None:
         self.d = d
@@ -67,6 +68,8 @@ class Enemy:
         self.hy = 0.0
         self.rage = False
         self.chest = d.elite
+        self.charm_t = 0.0      # okouzlení Divou (ultimátka Božská krása) – bojuje za hráče
+        self.foe = None         # cíl okouzlené lišky
 
 
 class Proj:

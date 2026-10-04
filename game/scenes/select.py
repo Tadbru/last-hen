@@ -5,18 +5,19 @@ import math
 
 import pygame
 
-from .. import assets
+from .. import assets, progression
 from ..config import C_GOLD, C_OUTLINE, C_TEXT, H, W
 from ..data.biomes import BIOME_ORDER, BIOMES
 from ..data.characters import CHAR_ORDER, CHARACTERS
 from ..data.meta import DIFF_ORDER, DIFFICULTIES
+from ..data.ultimates import ult_for
 from ..data.weapons import WEAPONS
 from ..gfx import pixelart as pa
 from ..gfx.tiles import ground_tiles
 from ..ui.widgets import MARGIN as M
 from ..ui.widgets import (SELECT_COLOR, Button, currency_row, draw_frame, draw_icon_frame, draw_panel,
                           draw_title_bar)
-from ..util import fmt_num
+from ..util import fmt_num, fmt_time
 from .base import Dialog, Scene, draw_scene_bg
 
 
@@ -28,7 +29,8 @@ class SelectScene(Scene):
         s = self.save
         self.ci = CHAR_ORDER.index(s["last_char"]) if s["last_char"] in CHAR_ORDER else 0
         self.biome = s["last_map"] if s["last_map"] in s["unlocked_maps"] else "farm"
-        self.mode = s["last_mode"] if s["last_mode"] in ("quick", "full") else "quick"
+        modes = ("quick", "full", "endless") if progression.endless_unlocked(s) else ("quick", "full")
+        self.mode = s["last_mode"] if s["last_mode"] in modes else "quick"
         self.diff = s["last_diff"] if s["last_diff"] in s["unlocked_diffs"] else "normal"
         self.add(Button((M, 10, 64, 64), "", self.back, icon="back", style="dark"))
         self.add(Button((M, 196, 52, 120), "", self.prev, icon="back", style="dark", key=pygame.K_LEFT))
@@ -36,11 +38,13 @@ class SelectScene(Scene):
         self.b_buy = self.add(Button((W // 2 - 150, 436, 300, 60), "Koupit", self.buy_char, style="gold",
                                      icon="cur_egg"))
         self.map_rects = [pygame.Rect(M + i * 104, 524, 96, 94) for i in range(5)]
-        half = (W - 2 * M - 12) // 2
-        self.b_quick = self.add(Button((M, 652, half, 66), "Rychlý", lambda: self.set_mode("quick"),
-                                       sub="boss ve 2:30", icon="clock"))
-        self.b_full = self.add(Button((W - M - half, 652, half, 66), "Plný", lambda: self.set_mode("full"),
-                                      sub="boss v 10:00", icon="clock"))
+        mw = (W - 2 * M - 24) // 3        # tři módy vedle sebe; menší ikony, ať fajfka výběru nepřekryje text
+        self.b_quick = self.add(Button((M, 652, mw, 66), "Rychlý", lambda: self.set_mode("quick"),
+                                       sub="boss ve 2:30", icon="clock", icon_scale=2))
+        self.b_full = self.add(Button((M + mw + 12, 652, mw, 66), "Plný", lambda: self.set_mode("full"),
+                                      sub="boss v 10:00", icon="clock", icon_scale=2))
+        self.b_endless = self.add(Button((W - M - mw, 652, mw, 66), "Noc", lambda: self.set_mode("endless"),
+                                         sub="bez konce", icon="moon", icon_scale=2))
         self.b_diff = []
         dw = (W - 2 * M - 24) // 3
         for i, did in enumerate(DIFF_ORDER):
@@ -73,6 +77,12 @@ class SelectScene(Scene):
         # jednotný styl „vybráno“ = rámeček + fajfka; oranžová zůstává jen akcím (B-36)
         self.b_quick.selected = self.mode == "quick"
         self.b_full.selected = self.mode == "full"
+        # Nekonečná noc: zamčená do výhry Plného módu, pak ukazuje rekord
+        en = progression.endless_unlocked(self.save)
+        best = progression.endless_record(self.save, self.biome, self.diff)    # pro zvolenou mapu a obtížnost (B-85)
+        self.b_endless.enabled = en
+        self.b_endless.selected = self.mode == "endless"
+        self.b_endless.sub = "zamčeno" if not en else f"rekord {fmt_time(best)}" if best else "bez konce"
         for did, bt in zip(DIFF_ORDER, self.b_diff):
             ok = did in self.save["unlocked_diffs"]
             bt.enabled = ok
@@ -113,6 +123,9 @@ class SelectScene(Scene):
                             [("Koupit", do, "gold"), ("Zpět", None, "secondary")])
 
     def on_down(self, ev) -> None:
+        if self.b_endless.contains(ev.x, ev.y) and not self.b_endless.enabled:
+            self.toast("Nekonečná noc: nejdřív vyhraj Plný mód!", (255, 170, 120))
+            return
         for bid, r in zip(BIOME_ORDER, self.map_rects):
             if r.collidepoint(ev.x, ev.y):
                 self.pick_map(bid)
@@ -176,21 +189,27 @@ class SelectScene(Scene):
         if not un:
             img = pa.silhouette(img, (20, 14, 26))
         hop = abs(math.sin(self.t * 3)) * 8 if un else 0
-        surf.blit(pa.make_shadow(70, 16, 90), (r.centerx - 35, r.y + 106))
-        surf.blit(img, img.get_rect(midbottom=(r.centerx, r.y + 116 - hop)))
+        surf.blit(pa.make_shadow(70, 16, 90), (r.centerx - 35, r.y + 92))
+        surf.blit(img, img.get_rect(midbottom=(r.centerx, r.y + 102 - hop)))
         if not un:
             lk = assets.icons.get("lock", 5)
-            surf.blit(lk, lk.get_rect(center=(r.centerx + 70, r.y + 60)))
-        font.draw(surf, c.name if un else "???", (r.centerx, r.y + 122), c.color if un else C_TEXT, 3, "midtop",
+            surf.blit(lk, lk.get_rect(center=(r.centerx + 70, r.y + 50)))
+        font.draw(surf, c.name if un else "???", (r.centerx, r.y + 106), c.color if un else C_TEXT, 3, "midtop",
                   outline=C_OUTLINE)
+        ult = ult_for(c.id)
         if un or c.unlock != "secret":
             tw = r.w - 24
             w = WEAPONS[c.weapon]
-            y = r.y + 162
+            y = r.y + 136
             draw_icon_frame(surf, (r.x + 12, y, 40, 40), w.icon, scale=3, gray=not un)
             font.draw(surf, font.fit(w.name, tw - 52, 2), (r.x + 60, y + 9), (255, 230, 180), 2, "topleft",
                       outline=C_OUTLINE)
-            y += 48
+            y += 42
+            # ultimátka zvířete (tlačítko vpravo dole ve hře)
+            draw_icon_frame(surf, (r.x + 12, y, 40, 40), ult.icon, scale=3, gray=not un)
+            font.draw(surf, font.fit(ult.name, tw - 52, 2), (r.x + 60, y + 9), ult.color if un else C_TEXT, 2,
+                      "topleft", outline=C_OUTLINE)
+            y += 44
             for ln in font.wrap(c.passive_desc, tw, 2)[:2]:
                 font.draw(surf, ln, (r.x + 12, y), (170, 235, 170), 2, "topleft", outline=C_OUTLINE)
                 y += font.line_h(2)
@@ -207,7 +226,8 @@ class SelectScene(Scene):
                 for j, ln in enumerate(font.wrap(c.unlock_text, W - 2 * M, 2)[:2]):
                     font.draw(surf, ln, (W // 2, 442 + j * 24), (255, 200, 140), 2, "midtop", outline=C_OUTLINE)
         else:
-            for j, ln in enumerate(font.wrap(c.desc, W - 2 * M, 2)[:2]):
+            # popis ultimátky – podle něj se plánuje run (dřív tu byl vtipný popis zvířete)
+            for j, ln in enumerate(font.wrap(ult.desc, W - 2 * M, 2)[:2]):
                 font.draw(surf, ln, (W // 2, 440 + j * 24), (220, 210, 230), 2, "midtop")
         # mapy
         section(surf, "Mapa", 498)

@@ -30,9 +30,10 @@ def build_config(app, character: str, biome: str, mode: str, difficulty: str = "
     skin = save["skin"].get(character)
     if not progression.skin_usable(save, skin):
         skin = None            # sezónní skin po skončení sezóny se nenosí
+    record = progression.endless_record(save, biome, difficulty) if mode == "endless" else 0
     return RunConfig(character=character, biome=biome, mode=mode, difficulty=difficulty,
                      seed=seed if seed is not None else random.randrange(1 << 30), modifiers=modifiers, meta=meta,
-                     rerolls=rerolls, banishes=2, bonus_levels=bonus, skin=skin, season=season)
+                     rerolls=rerolls, banishes=2, bonus_levels=bonus, skin=skin, season=season, record=record)
 
 
 def replay_allowed(app, cfg: RunConfig) -> bool:
@@ -60,6 +61,7 @@ class GameScene(Scene):
         self.joy = Joystick()
         self.overlay = None
         self.crow_pressed = False
+        self.debug_tick = None          # ladicí scénář: volá se každý tick (game/scenarios.py)
         self.end_t = 0.0
         self.death_prompted = False
         self.finished = False
@@ -94,6 +96,14 @@ class GameScene(Scene):
                 self.joy.move(ev.x, ev.y)
         elif ev.type == "up":
             self.joy.release()
+        elif ev.type == "finger":
+            # další prst (telefon): ultimátka nebo pauza, i když jiný prst drží joystick
+            if hud.crow_hit(ev.x, ev.y):
+                self.crow_pressed = True
+            elif hud.PAUSE_RECT.collidepoint(ev.x, ev.y):
+                self.pause()
+        elif ev.type == "alt":
+            self.crow_pressed = True            # PC: pravé tlačítko myši
         elif ev.type == "key":
             self.on_key(ev.key)
 
@@ -129,6 +139,12 @@ class GameScene(Scene):
                 run.pending_chests.append("elite")
             elif key == pygame.K_F10:
                 run.time += 60
+            elif key == pygame.K_F4:
+                run.crow_charge = run.crow_cap = 1.0
+                run.banner("Ultimátka nabita", run.ult.color, 1.0)
+            elif key == pygame.K_F2:
+                from ..scenarios import next_ult
+                next_ult(run)
 
     def pause(self) -> None:
         if self.overlay is None and self.run.state == "playing":
@@ -169,6 +185,8 @@ class GameScene(Scene):
         crow = self.crow_pressed
         self.crow_pressed = False
         if self.modal is None:
+            if self.debug_tick is not None and run.state == "playing":
+                self.debug_tick(run)
             run.update(dt, mx, my, crow)
         # přechody stavů → overlaye
         if run.state == "levelup" and not isinstance(self.overlay, LevelUpOverlay):
@@ -242,8 +260,9 @@ class GameScene(Scene):
         box = pygame.Surface((W - 40, 150), pygame.SRCALPHA)
         box.fill((20, 12, 24, int(a * 0.8)))
         surf.blit(box, (20, H - 330))
-        lines = ["Drž a táhni prstem/myší ve spodní části", "obrazovky (nebo WASD / šipky).",
-                 f"{ch.name} střílí {'sama' if ch.female else 'sám'}!", "Mezerník / velké tlačítko = KOKRHÁNÍ"]
+        lines = ["Ťukni kamkoli, drž a táhni prstem", "nebo myší (případně WASD / šipky).",
+                 f"{ch.name} střílí {'sama' if ch.female else 'sám'}!",
+                 f"Mezerník / velké tlačítko = {self.run.ult.short}"]
         for i, ln in enumerate(lines):
             col = (255, 230, 120) if i >= 2 else (240, 235, 245)
             font.draw(surf, ln, (W // 2, H - 318 + i * 32), col, 2, "midtop", alpha=a)

@@ -7,6 +7,7 @@ from .. import assets
 from ..data.enemies import AI_BAT, AI_BERSERK, AI_CHASE, AI_NECRO, AI_SPIT
 from .entities import EProj
 from .mapgen import push_out
+from .ultimates import charm_hit, charm_target
 
 RECYCLE_D2 = 1150.0 * 1150.0
 
@@ -58,6 +59,36 @@ def update_enemies(run, dt: float) -> None:
         elif e.stun_t > 0:
             e.stun_t -= dt
             frozen = True
+        elif e.charm_t > 0:
+            # okouzlená Divou: útočí na nejbližší neokouzlené nepřátele, hráče nechá být
+            e.charm_t -= dt
+            foe = e.foe
+            if foe is None:
+                if (e.id + tick) % 12 == 0:      # bez cíle hledá jen občas – dřív každý tick (B-95)
+                    foe = e.foe = charm_target(run, e)
+            elif not foe.alive or foe.charm_t > 0 or (e.id + tick) % 24 == 0:
+                foe = e.foe = charm_target(run, e)
+            if e.charm_t <= 0:
+                e.foe = None
+                # prozření: chvíli zmatená, ať stráž, která skončí u Divy, hned nekousne (B-93)
+                e.stun_t = max(e.stun_t, run.charm[6] if run.charm else 0.8)
+                run.particles.hearts(e.x, e.y - 18, 1, 40, broken=True)
+            elif foe is not None:
+                fdx, fdy = foe.x - e.x, foe.y - e.y
+                fd = sqrt(fdx * fdx + fdy * fdy) or 0.001
+                vx, vy = fdx / fd * speed * 1.25, fdy / fd * speed * 1.25
+                if fd < e.r + foe.r + 6 and e.touch_cd <= 0:
+                    charm_hit(run, e, foe, fdx, fdy)
+            else:
+                # bez cíle drží stráž v kruhu kolem Divy (dřív se stáhla až na 90 px, B-93)
+                guard = run.charm[5] if run.charm else 150.0
+                if d > guard + 30:
+                    vx, vy = nx * speed, ny * speed
+                elif d < guard - 30:
+                    vx, vy = -nx * speed * 0.8, -ny * speed * 0.8
+                else:
+                    s = 1 if e.id & 1 else -1
+                    vx, vy = -ny * speed * 0.4 * s, nx * speed * 0.4 * s
         elif e.hyp_t > 0:
             e.hyp_t -= dt
             a = e.t * 1.7 + e.id
@@ -162,7 +193,7 @@ def update_enemies(run, dt: float) -> None:
         # kontakt s hráčem
         if player_alive:
             rr = e.r + pr
-            if d2 < rr * rr and not frozen and e.hyp_t <= 0:
+            if d2 < rr * rr and not frozen and e.hyp_t <= 0 and e.charm_t <= 0:
                 p.take_damage(e.dmg, e.x, e.y, "kontakt")
             if slide_hit and d2 < (rr + 6) * (rr + 6) and e.touch_cd <= 0:
                 e.touch_cd = 0.35

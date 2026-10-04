@@ -8,14 +8,16 @@ import pygame
 
 from .. import assets
 from ..config import H, PX, W
+from ..data import waves as WV
 from ..device import fblits
 from ..gfx import pixelart as pa
-from ..gfx.particles import blit_add, cream_sprite, disc_sprite, glow_sprite, stink_line_sprite
+from ..gfx.particles import HEART, blit_add, cream_sprite, disc_sprite, glow_sprite, shape_sprite, stink_line_sprite
 from ..gfx.sprites import angle_index
 from ..gfx.tiles import TILE
 from ..ui.hud import world_top
 from ..ui.widgets import notched_rect
 from ..util import clamp, lerp_color, mul_color
+from . import ult_render
 from .entities import M_BOOMERANG, M_LOB, M_SPIRAL, M_WAVE, P_CHEST, P_COIN, P_GOLDEGG, P_MAGNET, P_WORM, P_XP
 
 FAST_MULT = hasattr(pygame.Surface, "fblits")     # pygame-ce má SIMD blend; klasický pygame ne
@@ -130,6 +132,8 @@ class RunRenderer:
             base = anim.frames[face][f]
             if kind == "ice":
                 s = pa.silhouette(base, (150, 220, 255), 150)
+            elif kind == "charm":
+                s = pa.silhouette(base, (255, 120, 190), 120)
             else:
                 s = pa.silhouette(base, (200, 120, 255), 110)
             self._overlay[key] = s
@@ -153,6 +157,9 @@ class RunRenderer:
         run.particles.draw_decals(surf, ox, oy)
         if run.arena is not None:
             self._arena(surf, ox, oy, back=True)
+        # zemní vrstva ultimátek (mrazivý disk, mokrá stopa, značky vajec) pod telegrafy útoků – dřív je
+        # překrývala a okraj úderu bosse pod Dobou ledovou skoro zmizel (B-92)
+        ult_render.draw(surf, self, run, ox, oy, ground=True)
         self._telegraphs(surf, ox, oy, ground=True)
         self._areas(surf, ox, oy)
         self._pickups(surf, ox, oy)
@@ -164,6 +171,7 @@ class RunRenderer:
         self._bombs(surf, ox, oy)
         self._gas(surf, ox, oy)
         self._telegraphs(surf, ox, oy, ground=False)
+        ult_render.draw(surf, self, run, ox, oy, ground=False)
         run.particles.draw(surf, ox, oy)
         self._canopies(surf, ox, oy)
         if run.arena is not None:
@@ -533,7 +541,7 @@ class RunRenderer:
             blits.append((it[2], (it[3], it[4])))
             e = it[5]
             if e is not None:
-                if e.freeze_t > 0 or e.hyp_t > 0 or e.elite:
+                if e.freeze_t > 0 or e.hyp_t > 0 or e.elite or e.charm_t > 0:
                     extra.append(it)
         if blits:
             fblits(surf, blits)
@@ -569,6 +577,11 @@ class RunRenderer:
         f = int(e.anim) % len(frames)
         if e.freeze_t > 0:
             surf.blit(self.overlay(a, e.face, f, "ice"), (it[3], it[4]))
+        elif e.charm_t > 0:
+            # okouzlená Divou: růžová silueta a srdíčko nad hlavou
+            surf.blit(self.overlay(a, e.face, f, "charm"), (it[3], it[4]))
+            hs = shape_sprite(HEART, (255, 110, 180), 2 if e.charm_t > 1.0 or int(self.t * 8) & 1 else 3)
+            surf.blit(hs, (int(e.x - ox) - hs.get_width() // 2, int(it[4]) - 12 + int(math.sin(self.t * 6 + e.id) * 2)))
         elif e.hyp_t > 0:
             surf.blit(self.overlay(a, e.face, f, "hyp"), (it[3], it[4]))
             for i in range(3):
@@ -602,7 +615,7 @@ class RunRenderer:
                 self._slide_rot[key] = img
         else:
             img = anim.flash[face][f] if p.flash > 0 else anim.frames[face][f]
-        if p.invuln > 0 and p.flash <= 0 and int(self.t * 16) % 2 == 0 and run.state == "playing":
+        if p.invuln > 0 and p.flash <= 0 and p.ult_aura <= 0 and int(self.t * 16) % 2 == 0 and run.state == "playing":
             # průhlednost až na hotový (případně otočený) snímek – nikdy ne do cache
             img = img.copy()
             img.set_alpha(120)
@@ -789,6 +802,8 @@ class RunRenderer:
         ft = run.final_time or 600
         if run.victory:
             k = 1.0
+        elif run.endless:
+            k = clamp(run.time / ft, 0, WV.ENDLESS_DARK)      # Nekonečná noc: svítání nikdy nepřijde
         else:
             k = clamp(run.time / ft, 0, 1)
         night = run.biome.night

@@ -284,8 +284,8 @@ def compute_rewards(run) -> dict:
     eggs_time = int(t / 10) * M.EGGS_PER_10S
     eggs_kills = run.kills // 10 * M.EGGS_PER_10_KILLS
     minis = [b for b in run.bosses_killed if b != "zombie_rooster"]
-    final = "zombie_rooster" in run.bosses_killed
-    eggs_boss = len(minis) * M.EGGS_PER_MINIBOSS + (M.EGGS_FINAL_BOSS if final else 0)
+    finals = run.bosses_killed.count("zombie_rooster")      # v Nekonečné noci může padnout víckrát
+    eggs_boss = len(minis) * M.EGGS_PER_MINIBOSS + finals * M.EGGS_FINAL_BOSS
     eggs_win = M.EGGS_WIN_BONUS if run.victory else 0
     if run.cfg.mode in ("quick", "daily"):
         eggs_boss = int(eggs_boss * 0.6)
@@ -302,7 +302,7 @@ def compute_rewards(run) -> dict:
         lines.append(("Mince", eggs_coins))
     base = eggs_time + eggs_kills + eggs_boss + eggs_win + eggs_coins
     total = int(base * mult)
-    gold = len(minis) + (2 if final else 0)
+    gold = len(minis) + 2 * finals
     return dict(lines=lines, base=base, mult=mult, eggs=total, gold=gold)
 
 
@@ -326,6 +326,10 @@ def apply_results(save, run, rewards: dict) -> list[str]:
     key = "best_time_quick" if run.cfg.mode in ("quick", "daily") else "best_time_full"
     if run.cfg.mode in ("quick", "full", "daily"):
         rec[key] = max(rec[key], int(run.time))
+    if run.cfg.mode == "endless":
+        rec["best_time_endless"] = max(rec["best_time_endless"], int(run.time))     # celkově nejlepší
+        k = endless_key(run.biome.id, run.cfg.difficulty)
+        rec["endless_best"][k] = max(rec["endless_best"].get(k, 0), int(run.time))
     rec["boss_kills"] += len(run.bosses_killed)
     if run.victory:
         rec["wins"] += 1
@@ -358,6 +362,19 @@ def apply_results(save, run, rewards: dict) -> list[str]:
     msgs += check_challenges(save, run)
     save.save()
     return msgs
+
+
+def endless_unlocked(save) -> bool:
+    return bool(save["challenges"].get(M.ENDLESS_UNLOCK))
+
+
+def endless_key(biome: str, difficulty: str) -> str:
+    return f"{biome}:{difficulty}"
+
+
+def endless_record(save, biome: str, difficulty: str) -> int:
+    """Rekord Nekonečné noci pro mapu a obtížnost – Továrna na Nightmare nesoutěží s Farmou na Normal (B-85)."""
+    return int(save["records"]["endless_best"].get(endless_key(biome, difficulty), 0))
 
 
 def complete_challenge(save, cid: str) -> list[str]:
@@ -401,6 +418,7 @@ def check_challenges(save, run) -> list[str]:
         "critic": run.char.id == "turkey" and run.crits >= 500,
         "level40": run.level >= 40,
         "rich": d["records"]["total_eggs"] >= 10000,
+        "endless15": mode == "endless" and run.time >= M.ENDLESS_GOAL,
     }
     msgs = []
     for cid, ok in conds.items():

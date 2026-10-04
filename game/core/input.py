@@ -1,11 +1,14 @@
-"""Ovládání: plovoucí virtuální joystick (dotyk / myš) + klávesnice."""
+"""Ovládání: pevný virtuální joystick (dotyk / myš) + klávesnice.
+
+Joystick vznikne tam, kam hráč ťapne (kdekoli na obrazovce), střed zůstává po celou dobu dotyku na místě
+a po puštění joystick zmizí; další dotyk vytvoří nový jinde."""
 from __future__ import annotations
 
 import math
 
 import pygame
 
-from ..config import H
+from ..config import H, W
 
 
 class Joystick:
@@ -20,8 +23,8 @@ class Joystick:
         self.alpha = 0.0     # pro jemné zobrazení/skrytí
 
     def allowed_start(self, x: float, y: float) -> bool:
-        """Joystick se objeví jen ve spodních ~2/3 obrazovky."""
-        return y > H / 3
+        """Joystick jde vytvořit kdekoli na obrazovce (tlačítka pauzy a ultimátky má scéna přednostně)."""
+        return 0 <= x <= W and 0 <= y <= H
 
     def press(self, x: float, y: float) -> None:
         self.active = True
@@ -36,11 +39,8 @@ class Joystick:
         d = math.hypot(dx, dy)
         r = self.RADIUS
         if d > r:
-            # plovoucí: základna se táhne za prstem
-            k = (d - r) / d
-            self.ox += dx * k
-            self.oy += dy * k
-            dx, dy = x - self.ox, y - self.oy
+            # pevný: střed stojí, páčka se zastaví na okraji a směr určuje prst (plná rychlost)
+            dx, dy = dx / d * r, dy / d * r
             d = r
         self.px, self.py = x, y
         m = d / r

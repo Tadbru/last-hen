@@ -25,6 +25,7 @@ RATE = {
     "plop": 0.045, "hit": 0.05, "pickup": 0.035, "throw": 0.08, "explode": 0.07, "water": 0.06,
     "zap": 0.06, "bite": 0.07, "cluck": 2.5, "spit": 0.15, "helmet": 0.1, "wave": 0.1, "whip": 0.08,
     "shotgun": 0.1, "cloud": 0.25, "coin": 0.06, "freeze": 0.12, "stamp": 0.15, "hop": 0.12,
+    "honk": 0.2, "shatter": 0.3,
 }
 VARIANTS = {"plop": 3, "pickup": 3, "cluck": 3}
 

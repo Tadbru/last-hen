@@ -6,6 +6,8 @@ import math
 from ..data.characters import CharDef
 from ..data.meta import NEST_BY_ID
 from ..data.passives import PASSIVES
+from ..data.waves import ENDLESS_NIGHT_MIGHT
+from ..gfx.sprites import beak_offset
 
 BASE_HP = 100.0
 BASE_SPEED = 150.0
@@ -70,6 +72,8 @@ class Player:
         self.in_water = False       # louže nebo led (pasivka Kachny, B-60)
         self.golden_t = 20.0
         self.extra_dmg_mult = 1.0
+        self.ult_speed = 1.0        # násobič rychlosti z ultimátky (Husí řádění)
+        self.ult_aura = 0.0         # záře ultimátky kolem zvířete (0–1, jen vizuál)
         self.recompute(first=True)
 
     # --- statistiky -----------------------------------------------------------------
@@ -85,6 +89,8 @@ class Player:
         st.magnet = BASE_MAGNET * (1 + NEST_BY_ID["magnet"]["step"] * m.get("magnet", 0) + PASSIVES["magnet"].step * lv("magnet"))
         st.might = c.might * (1 + NEST_BY_ID["dmg"]["step"] * m.get("dmg", 0) + PASSIVES["shell"].step * lv("shell"))
         st.might *= self.run.mod_dmg_mult
+        if self.run.night_power:
+            st.might *= 1 + ENDLESS_NIGHT_MIGHT * self.run.night_power
         st.area = 1 + PASSIVES["megaphone"].step * lv("megaphone")
         st.cooldown = c.cooldown * max(0.45, 1 + PASSIVES["clock"].step * lv("clock"))
         st.proj_speed = 1 + PASSIVES["glasses"].step * lv("glasses")
@@ -118,7 +124,7 @@ class Player:
         water = special == "water" and self.in_water
         if water:
             zone_mult = 1.4
-        speed = st.speed * zone_mult
+        speed = st.speed * zone_mult * self.ult_speed
         if moving:
             nx, ny = mx / mag, my / mag
             if special == "slide":
@@ -227,3 +233,9 @@ class Player:
 
     def heal(self, amount: float) -> None:
         self.hp = min(self.stats.max_hp, self.hp + amount)
+
+    def beak(self) -> tuple[float, float]:
+        """Poloha špičky zobáku ve světě (odkud střílí Zobák-laser) – podle spritu, směru a klouzání tučňáka."""
+        lying = self.char.special == "slide" and self.slide > 0.55
+        dx, dy = beak_offset(self.char.id, self.face, lying)
+        return self.x + dx, self.y + dy

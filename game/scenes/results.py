@@ -35,7 +35,14 @@ class ResultsScene(Scene):
         self.victory = run.victory
         run._settle_chests()            # nevyzvednuté/neotevřené bedny → mince (B-50)
         self.rewards = progression.compute_rewards(run)
+        # rekord Nekonečné noci se vede pro mapu a obtížnost (B-85)
+        prev_best = progression.endless_record(app.save, run.biome.id, run.cfg.difficulty)
         self.msgs = progression.apply_results(app.save, run, self.rewards)
+        self.new_record = run.cfg.mode == "endless" and int(run.time) > prev_best
+        self.endless_best = max(prev_best, int(run.time))
+        if self.new_record:
+            where = f"{run.biome.short or run.biome.name}, {run.diff.name}"
+            self.msgs.insert(0, f"Nový rekord Nekonečné noci ({where}): {fmt_time(run.time)}!")
         if run.chest_coins[0]:
             n, c = run.chest_coins
             self.msgs.insert(0, f"Neotevřené bedny ({n}): +{c} mincí")
@@ -155,7 +162,7 @@ class ResultsScene(Scene):
         try:
             from .. import device
             from ..share import make_share_image, share_text
-            path = make_share_image(self.run, self.victory)
+            path = make_share_image(self.run, self.victory, record=self.new_record)
             msg = device.share_image(path, share_text(self.run) + " #LastChicken")
             self.toast(msg, (150, 220, 255), 3.5)
             self.b_share.sub = "hotovo ✓"
@@ -172,6 +179,12 @@ class ResultsScene(Scene):
             title, col = "VÍTĚZSTVÍ!", (255, 220, 90)
             sub = VICTORY_SUB.get("bossrush" if run.cfg.mode == "bossrush" else run.biome.id,
                                   "Slunce vyšlo. Lišky jsou poražené!")
+        elif run.endless:
+            if self.new_record:
+                title, col = "REKORD!", C_GOLD
+            else:
+                title, col = ("PADLA!" if run.char.female else "PADL!"), (255, 110, 100)
+            sub = f"Nekonečná noc: {run.director.night}. noc · rekord {fmt_time(self.endless_best)}"
         else:
             title, col = ("PADLA!" if run.char.female else "PADL!"), (255, 110, 100)
             sub = "Lišky tentokrát vyhrály. Příště!"

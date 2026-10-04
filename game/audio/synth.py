@@ -267,7 +267,58 @@ def sfx_library() -> dict[str, np.ndarray]:
     add("avalanche", lowpass(noise(0.5, 21), 30) * env(n, 0.15, 0.1, 0.8, 0.2), 0.7)
     n = _n(0.18)
     add("stamp", wave("square", sweep(140, 60, 0.18), 0.18) * decay(n, 15) + noise(0.18, 22) * decay(n, 40) * 0.6, 0.7)
+    _ult_sounds(add)
     return L
+
+
+def _honk(f0: float, dur: float) -> np.ndarray:
+    """Husí „kejh“: nosová samohláska s chraplavým šumem."""
+    v = formant_voice(sweep(f0 * 1.08, f0 * 0.92, dur), dur, ((650, 1.0), (1150, 0.8), (2500, 0.35)), 190)
+    v = v + highpass(noise(dur, 31), 4) * 0.25
+    return v * env(_n(dur), 0.01, 0.04, 0.8, dur * 0.35)
+
+
+def _ult_sounds(add) -> None:
+    """Zvuky ultimátek – každé zvíře má vlastní (Elvis dál „crow“)."""
+    # slepice: „kdák“ + zlatá zvonkohra vzhůru + vzdálené bouchnutí
+    cl = formant_voice(sweep(500, 380, 0.1), 0.1, ((480, 1.0), (850, 0.55)), 130) * env(_n(0.1), 0.004, 0.02, 0.7, 0.04)
+    chimes = concat(*[wave("sine", midi(m), 0.07) * decay(_n(0.07), 12) for m in (84, 88, 91, 96, 100)])
+    chimes = mix(chimes, wave("tri", midi(103), 0.5) * decay(_n(0.5), 6) * 0.5)
+    add("ult_hen", concat(cl, silence(0.03), chimes), 0.6)
+    # kachna: nabíhající vlna (šum) + dlouhé „KVÁÁÁK“
+    n = _n(0.9)
+    rush = lowpass(noise(0.9, 32), 9) * env(n, 0.25, 0.1, 0.8, 0.4)
+    q = formant_voice(sweep(560, 390, 0.42), 0.42, ((900, 1.0), (1500, 0.6), (2600, 0.2)), 210)
+    q = (q + wave("saw", sweep(280, 195, 0.42), 0.42) * 0.25) * env(_n(0.42), 0.01, 0.05, 0.8, 0.15)
+    add("ult_duck", mix(rush * 0.8, concat(silence(0.05), q)), 0.75)
+    # husa: dvojité kejhnutí + syčení
+    hiss = highpass(noise(0.35, 33), 2) * env(_n(0.35), 0.05, 0.05, 0.6, 0.15) * 0.5
+    add("ult_goose", concat(_honk(340, 0.17), silence(0.04), _honk(380, 0.24), hiss), 0.75)
+    add("honk", _honk(360, 0.15), 0.55)
+    # krocan: „hudry-hudry“ (rychle chvějivý formant) + buben
+    d = 0.5
+    t = np.arange(_n(d), dtype=np.float32) / SR
+    gob = formant_voice(sweep(300, 240, d), d, ((600, 1.0), (1000, 0.6)), 160)
+    gob = gob * (0.55 + 0.45 * np.sin(2 * np.pi * 24 * t)) * env(_n(d), 0.01, 0.05, 0.8, 0.12)
+    drum = wave("sine", sweep(120, 45, 0.3), 0.3) * decay(_n(0.3), 10) + lowpass(noise(0.3, 34), 5) * decay(_n(0.3), 18)
+    add("ult_turkey", mix(gob, concat(silence(0.42), drum)), 0.75)
+    # páv: třpytivé glissando vzhůru + páví „mí-áu“
+    gl = mix(*[wave("sine", vibrato(midi(m), 0.6, 7, 0.01), 0.6) * env(_n(0.6), 0.02 + i * 0.07, 0.05, 0.6, 0.25) * 0.5
+               for i, m in enumerate((79, 84, 88, 91, 96))])
+    call = formant_voice(np.concatenate([sweep(900, 1300, 0.12), sweep(1300, 700, 0.28)]), 0.4,
+                         ((1500, 1.0), (2800, 0.5)), 260) * env(_n(0.4), 0.01, 0.05, 0.8, 0.12)
+    add("ult_peacock", mix(gl, concat(silence(0.3), call * 0.8)), 0.6)
+    # tučňák: ledový vítr + krystalky
+    n = _n(1.0)
+    wind = highpass(lowpass(noise(1.0, 35), 3), 30) * env(n, 0.2, 0.1, 0.7, 0.45)
+    cry = concat(*[wave("sine", midi(m), 0.09) * decay(_n(0.09), 18) for m in (96, 103, 100, 108, 105)])
+    add("ult_penguin", mix(wind, concat(silence(0.15), cry * 0.7)), 0.6)
+    # roztříštění ledu
+    n = _n(0.35)
+    sh = highpass(noise(0.35, 36), 2) * decay(n, 14)
+    pings = mix(*[concat(silence(0.02 * i), wave("sine", f, 0.2) * decay(_n(0.2), 20)) for i, f in
+                  enumerate((2100, 2900, 1700, 3400, 2500))])
+    add("shatter", mix(sh, pings * 0.5), 0.6)
 
 
 # ---------------------------------------------------------------------------

@@ -44,7 +44,7 @@ CHALLENGES = [
     dict(id="ascetic", name="Asketa", desc="Vyhraj run bez jediné pasivky.", reward=(400, 2)),
     dict(id="goose5", name="Husí kůže", desc="Přežij 5 minut jako Husa Gerta.", reward=(250, 1)),
     dict(id="evolve", name="Evoluce!", desc="Vyvij jakoukoli zbraň.", reward=(150, 1)),
-    dict(id="crow10", name="Kokrhací mistr", desc="Použij kokrhání 10× v jednom runu.", reward=(200, 1)),
+    dict(id="crow10", name="Kokrhací mistr", desc="Použij ultimátku 10× v jednom runu.", reward=(200, 1)),
     dict(id="massacre", name="Masakr", desc="Zabij 50 nepřátel téměř naráz.", reward=(150, 1)),
     dict(id="arsenal", name="Arzenál", desc="Měj 6 zbraní najednou.", reward=(150, 1)),
     dict(id="nightmare", name="Noční můra", desc="Vyhraj na obtížnost Nightmare.", reward=(1000, 5)),
@@ -56,7 +56,10 @@ CHALLENGES = [
     dict(id="penguin", name="Kde se tu vzal?", desc="Najdi tajného tučňáka.", reward=(100, 1)),
     dict(id="level40", name="Vzdělaná slepice", desc="Dosáhni úrovně 40 v jednom runu.", reward=(300, 2)),
     dict(id="rich", name="Vaječný magnát", desc="Nasbírej celkem 10 000 vajec.", reward=(0, 3)),
+    dict(id="endless15", name="Věčná tma", desc="Přežij 15 minut v Nekonečné noci.", reward=(500, 3)),
 ]
+ENDLESS_UNLOCK = "full_night"   # Nekonečnou noc odemyká výhra Plného módu (výzva „Celá noc“)
+ENDLESS_GOAL = 900              # s – výzva „Věčná tma“
 CHALLENGE_BY_ID = {c["id"]: c for c in CHALLENGES}
 
 # --- Skiny ----------------------------------------------------------------------------------

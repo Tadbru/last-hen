@@ -37,6 +37,7 @@ def log_crash(exc: BaseException) -> str:
 
 
 _WINDOWSIZECHANGED = getattr(pygame, "WINDOWSIZECHANGED", -100)
+_FINGERDOWN = getattr(pygame, "FINGERDOWN", -101)
 _BACKGROUND_EVENTS = {getattr(pygame, n) for n in ("APP_WILLENTERBACKGROUND", "APP_DIDENTERBACKGROUND")
                       if hasattr(pygame, n)}
 _FOREGROUND_EVENTS = {getattr(pygame, n) for n in ("APP_DIDENTERFOREGROUND",) if hasattr(pygame, n)}
@@ -72,7 +73,11 @@ class App:
         self.mouse_down = False
         device.keep_screen_on()
         from .scenes.menu import MenuScene
-        if Flags.quick:
+        if Flags.scenario:
+            from .scenarios import start
+            self.save.persist = False       # ladicí scénář nesmí měnit skutečný postup (B-86)
+            self.set_scene(start(self, Flags.scenario, Flags.seed))
+        elif Flags.quick:
             from .scenes.game import GameScene
             from .world.run import RunConfig
             self.set_scene(GameScene(self, RunConfig(character="hen", biome="farm", mode="quick")))
@@ -190,6 +195,16 @@ class App:
             self.mouse_down = False
             x, y = self.to_logical(e.pos)
             return Ev("up", x, y)
+        if t == _FINGERDOWN:
+            # každý prst zvlášť (SDL převádí na myš jen první): druhým prstem jde zmáčknout ultimátka,
+            # i když první drží joystick
+            ww, wh = self.win_size
+            x, y = self.to_logical((e.x * ww, e.y * wh))
+            return Ev("finger", x, y)
+        if t == pygame.MOUSEBUTTONDOWN and e.button == 3:
+            # PC: pravé tlačítko = ultimátka i během tažení levým tlačítkem
+            x, y = self.to_logical(e.pos)
+            return Ev("alt", x, y)
         if t == pygame.MOUSEMOTION:
             x, y = self.to_logical(e.pos)
             return Ev("move", x, y)

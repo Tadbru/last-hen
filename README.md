@@ -32,7 +32,7 @@ automaticky otestuje hru a sestaví **Android aplikaci (APK)**. Hotové APK se o
 4. Novou verzi stačí nainstalovat přes starou – uložená hra zůstane (APK je podepsané stálým klíčem
    `app_assets/debug.keystore`).
 
-Na telefonu: ovládání palcem (táhni ve spodních 2/3 obrazovky), kokrhání velkým tlačítkem vpravo dole,
+Na telefonu: ovládání palcem (kam ťukneš, tam vznikne joystick; táhni), ultimátka velkým tlačítkem vpravo dole,
 systémové tlačítko Zpět = pauza / návrat, při odchodu z aplikace se hra sama pozastaví a uloží.
 Hra telefonem zavibruje při zásahu slepice a při úderech bossů (lze vypnout v Nastavení) a „Sdílet výsledek“ uloží obrázek do Galerie
 a otevře systémové sdílení.
@@ -47,39 +47,44 @@ Ikona a úvodní obrazovka se generují skriptem `python tools/make_app_assets.p
 
 | Akce | PC | Mobil (do budoucna) |
 |---|---|---|
-| Pohyb | drž levé tlačítko myši ve spodních 2/3 obrazovky a táhni (plovoucí joystick), nebo WASD / šipky | palec kdekoli ve spodních 2/3 |
+| Pohyb | drž levé tlačítko myši kdekoli a táhni (pevný joystick: vznikne, kam klikneš, po puštění zmizí), nebo WASD / šipky | palec kdekoli na obrazovce, stejný pevný joystick |
 | Útok | automaticky | automaticky |
-| Kokrhání (special) | mezerník nebo velké tlačítko vpravo dole (nabíjí se zabíjením, nejdřív za 6 s) | tlačítko vpravo dole |
+| Ultimátka zvířete | mezerník, pravé tlačítko myši (i během tažení) nebo velké tlačítko vpravo dole (nabíjí se zabíjením, run začíná napůl nabitý) | tlačítko vpravo dole – i druhým prstem, zatímco první drží joystick |
 | Pauza | Esc / P / tlačítko vpravo nahoře | tlačítko vpravo nahoře |
 | Karty při levelupu | klepnutí / klávesy 1, 2, 3, R = rerol, X = skip, B = vyřadit | klepnutí |
 | Debug | F3 overlay (FPS, entity, kolizní grid), F11 celá obrazovka | – |
-| Debug (s `--debug` nebo po F3) | F5 další boss, F6 levelup, F7 zabij vše, F8 nesmrtelnost, F9 připrav evoluce, F10 +1 min | – |
+| Debug (s `--debug` nebo po F3) | F5 další boss, F6 levelup, F7 zabij vše, F8 nesmrtelnost, F9 připrav evoluce, F10 +1 min, F4 nabij ultimátku, F2 ultimátka dalšího zvířete | – |
 
 Tajemství: zkus 10× klepnout na logo v menu.
 
 ## Obsah
 
 **Módy:** Rychlý (Zombie Kohout přilétá ve 2:30, celkem ~3–4 min), Plný (mini-bossové ve 2/4/6/8 min, finální boss v 10:00),
+Nekonečná noc (odemkne výhra Plného módu: prvních 10 minut jako Plný mód, pak slunce nevyjde – další noci se silnějšími
+bossy (další přijde až po porážce předchozího), lišky dál sílí, hraje se na rekord času pro každou mapu a obtížnost;
+„noční síla“ +4 % poškození za level-up s hotovým buildem),
 Denní výzva (seed z data, jeden pokus, modifikátor, lokální žebříček), Týdenní boss rush (všech 5 bossů za sebou).
 Obtížnosti Normal / Hard / Nightmare.
 
 **Zvířata (7):**
 
-| Zvíře | Startovní zbraň | Pasivka | Slabina | Odemčení |
-|---|---|---|---|---|
-| Slepice Božena | Vejce granát | každých 20 s zlaté vejce plné XP | průměrná | od začátku |
-| Kachna Kvak | Vodní pistole (prorazí řadu) | ve vodě/na ledu +40 % rychlost | 85 % životů | 500 vajec |
-| Husa Gerta | Zobák-šleh | +30 % životů | pomalá | 1 500 vajec |
-| Krocan Rambo | Brokovnice z peří | kritické zásahy ×3 | střílí pomaleji | 3 000 vajec |
-| Kohout Elvis | Zvukové vlny | kokrhání 2× rychleji | křehký | poraz Zombie Kohouta |
-| Páv Diva | Ocas-vějíř | hypnóza nepřátel | o 10 % víc XP na úroveň | výzva „Tisíc lišek“ |
-| Tajný tučňák | Mražená ryba (bumerang, mrazí) | klouzání po břiše – zrychluje a při plné rychlosti zraňuje | setrvačnost | easter egg |
+| Zvíře | Startovní zbraň | Pasivka | Slabina | Ultimátka | Odemčení |
+|---|---|---|---|---|---|
+| Slepice Božena | Vaječný granát | každých 20 s zlaté vejce plné XP | průměrná | Zlatá nadílka – déšť zlatých vajec, 2× XP | od začátku |
+| Kachna Kvak | Vodní pistole (prorazí řadu) | ve vodě/na ledu +40 % rychlost | 85 % životů | Velká voda – vlna ve směru pohybu unáší lišky | 500 vajec |
+| Husa Gerta | Husí štípanec | +30 % životů | pomalá | Husí řádění – 3 s nesmrtelná, kejhá a rozhazuje | 1 500 vajec |
+| Krocan Rambo | Brokovnice z peří | kritické zásahy ×3 | střílí pomaleji | Operace Díkůvzdání – salvy brků do všech stran | 3 000 vajec |
+| Kohout Elvis | Zvukové vlny | ultimátka se nabíjí 2× rychleji | křehký | Královské KIKIRIKÍ – původní kokrhání | poraz Zombie Kohouta |
+| Páv Diva | Páví vějíř | hypnóza nepřátel | o 10 % víc XP na úroveň | Božská krása – okouzlené lišky bojují za ni | výzva „Tisíc lišek“ |
+| Tajný tučňák | Mražená ryba (bumerang, mrazí) | klouzání po břiše – zrychluje a při plné rychlosti zraňuje | setrvačnost | Doba ledová – mrazivý vír kolem tučňáka | easter egg |
 
-**Zbraně (16, každá 8 úrovní) a evoluce (16):** Vejce granát → Zlatá bomba, Kokrhací vlna → Apokalypsa,
+Podrobnosti ultimátek (čísla, nabíjení, měření) jsou v `FEATURES.md`.
+
+**Zbraně (16, každá 8 úrovní) a evoluce (16):** Vaječný granát → Zlatá bomba, Kokrhací vlna → Apokalypsa,
 Kuřecí armáda → Kohoutí legie, Peří-shuriken → Peřinová vichřice, Zobák-laser → Oči sokola, Hnízdo → Pevnost Kurník,
 Kvaltík → Bouřková křídla, Slepičí smrad → Biologická zbraň, Vlčí vytí → Liščí kmotr, Koláč z vajec → Svatební dort,
-Vodní pistole → Hasičská hadice, Zobák-šleh → Husí hněv, Brokovnice z peří → Peří Gatling, Zvukové vlny → Rockový koncert,
-Ocas-vějíř → Duhová show, Mražená ryba → Ledová tsunami. Evoluce = zbraň na úr. 8 + správná pasivka + bedna z elity/bosse.
+Vodní pistole → Hasičská hadice, Husí štípanec → Husí hněv, Brokovnice z peří → Peří Gatling, Zvukové vlny → Rockový koncert,
+Páví vějíř → Duhová show, Mražená ryba → Ledová tsunami. Evoluce = zbraň na úr. 8 + správná pasivka + bedna z elity/bosse.
 
 **Pasivky (11, 5 úrovní):** Zdravé zrno, Rychlé nohy, Magnet na zrní, Zlatá skořápka, Budík, Peřová vesta,
 Šťastné vejce, Megafon, Krmivo, Čtyřlístek, Brýle.
@@ -98,7 +103,7 @@ variantu (Kohout Mlhoš, Kohout Kmotr, Kohout Yetti, Robokohout 3000). Všechny 
 
 **Progrese:** levelup karty (běžná/vzácná/epická = +1/+2/+3 úrovně; víc čekajících level-upů se spojí do
 jedné karty s úrovní navíc), rerol, skip za mince, vyřazení karty, bedny.
-Hnízdo (6 trvalých vylepšení × 5 úrovní), Sbírka (64 položek, odměny za 100 % kategorie), 18 výzev,
+Hnízdo (6 trvalých vylepšení × 5 úrovní), Sbírka (64 položek, odměny za 100 % kategorie), 19 výzev,
 Obchod (skiny pirát/kovboj/astronaut/ninja za zlatá vejce, truhly za žetony), denní login se sérií,
 sezónní témata (Halloween/Vánoce/Velikonoce podle data, přepínatelné v Nastavení), rubber-banding po brzké smrti.
 Reklamy („Zdvojnásob vejce“, „Oživ se“) jsou jen mock s falešným dialogem. Po runu „Sdílet výsledek“ uloží PNG do `shares/`.
@@ -117,10 +122,12 @@ game/core/              joystick + klávesnice, kamera, spatial hash grid
 game/gfx/               bitmapový font s diakritikou, pixel art, sprity, ikony, dlaždice, částice
 game/audio/             numpy syntéza SFX a vrstvené hudby, správce zvuku
 game/data/              datově řízený obsah: postavy, zbraně, pasivky, nepřátelé, bossové, biomy, vlny, meta
-game/world/             simulace runu (run.py), hráč, AI nepřátel, bossové, spojenci, mapa, director, renderer
+game/world/             simulace runu (run.py), hráč, AI nepřátel, bossové, spojenci, mapa, director, renderer,
+                        ultimátky (ultimates.py logika, ult_render.py vykreslení)
 game/weapons/           základ zbraně + 16 druhů chování
 game/ui/                widgety, HUD, overlaye (levelup, bedna, pauza)
 game/scenes/            menu, výběr, Hnízdo, Sbírka, Výzvy, Obchod, Denní, Nastavení, hra, výsledky, chyba
+game/scenarios.py       ladicí scénáře (`python main.py --debug --scenario ult_duck`)
 game/device.py          rozdíly PC / Android (úložiště, vibrace, sdílení, kompatibilita pygame 2.1)
 tools/                  simulate.py, profile_run.py, dps_bench.py, screenshots.py, preview_sprites.py,
                         make_app_assets.py (ikona a presplash)
@@ -130,7 +137,8 @@ buildozer.spec          konfigurace Android buildu (python-for-android)
 tests/smoke_test.py     headless smoke testy
 ```
 
-Nový obsah se přidává hlavně do `game/data/` (zbraň = záznam ve `weapons.py`, případně nový druh chování v `weapons/kinds.py`).
+Nový obsah se přidává hlavně do `game/data/` (zbraň = záznam ve `weapons.py`, případně nový druh chování v `weapons/kinds.py`;
+ultimátka = řádek v `data/ultimates.py` + funkce `@effect("id")` ve `world/ultimates.py`).
 
 ## Nástroje a testy
 
@@ -138,11 +146,14 @@ Nový obsah se přidává hlavně do `game/data/` (zbraň = záznam ve `weapons.
 python tests/smoke_test.py            # všechny smoke testy (headless), "fast" = zkrácená verze
 python tools/simulate.py --mode full --runs 3 -v      # bot odehraje celé runy a vypíše statistiky
 python tools/simulate.py --all --mode quick           # všechna zvířata × biomy
+python tools/simulate.py --mode endless --runs 3 -v   # Nekonečná noc (bot hraje do smrti, max. 15 min)
 python tools/profile_run.py [--cprofile] [--kills] [--biome=forest]   # zátěž 400 nepřátel + 300 projektilů
 python tools/dps_bench.py             # DPS všech zbraní (single target / AoE) pro balanc
 python tools/screenshots.py out_dir   # screenshoty všech scén
 python tools/preview_sprites.py sheet.png             # contact sheet všech spritů
 python tools/make_store_assets.py   # grafika pro Google Play do store/ (ikona, feature graphic, screenshoty)
+python tools/ult_lab.py measure|boss|runs|perf|shots   # měření ultimátek (balanc, výkon, screenshoty)
+python main.py --debug --scenario ult_duck           # ladicí scénář (seznam: python main.py --list-scenarios)
 ```
 
 ## Výkon (ověřeno profilingem)

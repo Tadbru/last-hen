@@ -6,6 +6,7 @@ import math
 from .. import assets
 from ..config import MAX_ENEMIES
 from ..data.bosses import BOSSES, FINAL_VARIANTS
+from ..data.waves import ENDLESS_ENRAGE
 from ..gfx import pixelart as pa
 from ..gfx.sprites import Anim
 from .entities import EProj, Telegraph
@@ -359,6 +360,7 @@ class ZombieRooster(BossCtrl):
         self.small = e.spr
         self.big = run.boss_sprite("zombie_rooster_big", variant.get("tint"))
         self.base_r = e.r
+        self.enrage_t = ENDLESS_ENRAGE if run.endless and run.director.night > 1 else 180.0     # (B-81)
         rl = variant.get("rain_line")
         if rl and len(bdef.lines) > 1:
             self.quotes = (bdef.lines[0], rl) + tuple(bdef.lines[2:])
@@ -383,7 +385,7 @@ class ZombieRooster(BossCtrl):
 
     def tick(self, dt: float) -> None:
         run, e = self.run, self.e
-        if not self.enraged and self.fight_t > 180:
+        if not self.enraged and self.fight_t > self.enrage_t:
             self.enraged = True
             e.dmg *= 1.5
             e.speed *= 1.3
@@ -547,9 +549,15 @@ class ZombieRooster(BossCtrl):
                 run.shake(0.35)
 
     def on_death(self) -> None:
+        if self.run.endless:
+            # Nekonečná noc: slunce nevyjde ani po jeho pádu
+            self.run.say(self.e, ENDLESS_DEATH, 3.0, dead=True)
+            self.run.boss_killed(self)
+            return
         super().on_death()
 
 
+ENDLESS_DEATH = "Kikiri… kí… (a slunce pořád nikde)"
 WIND_PUSH = 115.0     # px/s – pod rychlostí nejpomalejšího zvířete (husa ~132)
 WIND_TIME = 2.6
 
