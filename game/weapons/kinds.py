@@ -642,9 +642,64 @@ class BoomerangWeapon(Weapon):
         return True
 
 
+class BounceWeapon(Weapon):
+    """Lesklé cetky / Strakatý poklad – cetka se po každém zásahu odrazí k nejbližší další lišce."""
+
+    def __init__(self, *a, **k) -> None:
+        self.live: list = []
+        super().__init__(*a, **k)
+
+    def fire(self) -> bool:
+        run = self.run
+        p = run.player
+        s = self.s
+        targets = run.targets(p.x, p.y, s["range"], int(s["count"]))
+        if not targets:
+            return False
+        sp = self.pspeed(s["speed"])
+        rot = _rot("trinket")
+        for e in targets:
+            dx, dy = e.x - p.x, e.y - (p.y - 12)
+            d = math.hypot(dx, dy) or 1.0
+            pr = run.add_proj(p.x, p.y - 12, dx / d * sp, dy / d * sp, 7, self.dmg(), self,
+                              pierce=int(s["bounces"]) + p.stats.pierce, life=s["life"], kb=50)
+            pr.rot = rot
+            pr.data = 0                     # kolik zásahů už cetka obsloužila (odraz po každém novém)
+            if pr.alive and pr not in self.live:
+                self.live.append(pr)
+        run.sfx("trinket", 0.5)
+        return True
+
+    def update(self, dt: float) -> None:
+        super().update(dt)
+        if not self.live:
+            return
+        run = self.run
+        hop = self.area(self.s["hop"])
+        keep = []
+        for pr in self.live:
+            if not pr.alive or pr.src is not self:
+                continue
+            n = len(pr.hits)
+            if n != pr.data:
+                pr.data = n
+                hits = pr.hits
+                nxt = run.grid.nearest(pr.x, pr.y, hop, lambda o, h=hits: o.alive and not o.prop and o.alpha >= 128
+                                       and o.charm_t <= 0 and o.id not in h)
+                if nxt is not None:
+                    dx, dy = nxt.x - pr.x, nxt.y - pr.y
+                    d = math.hypot(dx, dy) or 1.0
+                    sp = math.hypot(pr.vx, pr.vy) or self.pspeed(self.s["speed"])
+                    pr.vx, pr.vy = dx / d * sp, dy / d * sp
+                    pr.life = max(pr.life, d / sp + 0.15)
+                    run.particles.sparkle(pr.x, pr.y, (255, 236, 150), 1)
+            keep.append(pr)
+        self.live = keep
+
+
 KINDS = {
     "lob": LobWeapon, "pulse": PulseWeapon, "chicks": ChicksWeapon, "spiral": SpiralWeapon, "laser": LaserWeapon,
     "nest": NestWeapon, "lightning": LightningWeapon, "stink": StinkWeapon, "foxes": FoxesWeapon, "cake": CakeWeapon,
     "gun": GunWeapon, "whip": WhipWeapon, "shotgun": ShotgunWeapon, "waves": WavesWeapon, "fan": FanWeapon,
-    "boomerang": BoomerangWeapon,
+    "boomerang": BoomerangWeapon, "bounce": BounceWeapon,
 }

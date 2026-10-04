@@ -45,10 +45,11 @@ XP_STEEP_FROM = 30          # od této úrovně roste potřeba XP rychleji
 XP_STEEP = 0.12
 RUSH_BOSS_LEVELS = 4        # kolik úrovní XP vysype boss v boss rushi
 GIANT_K = 4 / 3             # zvětšení obrů
-PAUSE_GAP = 8.0             # min. herní čas mezi dvěma přerušeními (level-upy se mezitím spojí do jedné obrazovky)
+PAUSE_GAP = 8.0             # min. herní čas mezi dvěma level-upy (mezitím se spojí do jedné obrazovky); bedny se nepočítají
 MERGE_MAX = 3               # kolik čekajících level-upů se nejvýš spojí do jedné obrazovky (B-74)
 BIG_FLASH = 0.07            # bílé bliknutí bosse/elity při zásahu (s)
 BIG_FLASH_GAP = 0.35        # …nejvýš jednou za tuto dobu → při trvalé palbě bílý max. ~20 % času (B-69)
+THIEF_COIN = 0.06           # Straka (Zlodějka): šance, že liška upustí minci navíc
 FROST_BONUS = 1.3           # tučňák (Ledová krev): zmražené lišky berou o 30 % víc – náhrada za zrušené klouzání
 
 @dataclass
@@ -644,6 +645,8 @@ class Run:
                 self.player.heal(1.0)
             if s.get("coin") and self.rng.random() < s["coin"]:
                 self.pickups.append(Pickup(e.x, e.y, P_COIN, 1))
+        if self.char.special == "thief" and self.rng.random() < THIEF_COIN:
+            self.pickups.append(Pickup(e.x - 6, e.y, P_COIN, 1))
         if e.xp:
             xp = e.xp
             if src is not None and src.s.get("xp_bonus"):
@@ -1089,13 +1092,14 @@ class Run:
         # intenzita hudby
         self.intensity = min(1.0, len(self.enemies) / 260.0 + (0.5 if self.bosses else 0.0))
 
-        # úrovně, bedny – nejvýš jedno přerušení za PAUSE_GAP s; čekající level-upy se pak ukážou za sebou (B-51)
+        # level-upy nejvýš jednou za PAUSE_GAP s (čekající se pak ukážou za sebou, B-51); bedny mimo rozestup (B-100)
         if self.pause_cd > 0:
             self.pause_cd -= dt
-        if self.state == "playing" and not p.dead and self.pause_cd <= 0:
-            if self.pending_levelups > 0:
+        if self.state == "playing" and not p.dead:
+            if self.pause_cd <= 0 and self.pending_levelups > 0:
                 self._open_levelup()
             elif self.pending_chests:
+                # sebraná truhla se otevře hned – hráč si ji vybral sám; rozestup PAUSE_GAP platí jen pro level-upy
                 self._open_chest()
 
     def _open_levelup(self) -> None:
@@ -1134,17 +1138,22 @@ class Run:
         self.chest_reward = progression.open_chest(self, kind)
 
     def resume(self) -> None:
-        """Po výběru karty / zavření bedny."""
+        """Po výběru karty / zavření bedny.
+
+        Bedna se do rozestupu mezi level-upy vůbec nepočítá: po jejím zavření se rozestup neobnoví a čekající
+        level-up se otevře, jen pokud už rozestup doběhl (jinak počká). Po level-upu se čekající level-upy ukážou
+        za sebou (B-51) a rozestup začne až od posledního."""
+        was_levelup = self.state == "levelup"
         self.offer = None
         self.offer_boost = 0
         self.chest_reward = None
         self.state = "playing"
-        if self.pending_levelups > 0:
+        if was_levelup:
+            self.pause_cd = PAUSE_GAP
+        if self.pending_levelups > 0 and (was_levelup or self.pause_cd <= 0):
             self._open_levelup()
         elif self.pending_chests:
             self._open_chest()
-        if self.state == "playing":
-            self.pause_cd = PAUSE_GAP
 
     def on_player_death(self) -> None:
         if self.victory:

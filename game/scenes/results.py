@@ -9,6 +9,7 @@ import pygame
 
 from .. import assets, progression
 from ..config import C_GOLD, C_OUTLINE, C_TEXT, H, W
+from ..data.meta import WEEKLY_RUSH_TOKENS
 from ..ui.widgets import Button, draw_icon_frame, draw_panel
 from ..gfx.particles import FEATHER, ParticleSystem
 from ..util import ease_out_back, ease_out_cubic, fmt_num, fmt_time
@@ -34,7 +35,7 @@ class ResultsScene(Scene):
         self.run = run
         self.victory = run.victory
         run._settle_chests()            # nevyzvednuté/neotevřené bedny → mince (B-50)
-        self.rewards = progression.compute_rewards(run)
+        self.rewards = progression.compute_rewards(run, app.save)
         # rekord Nekonečné noci se vede pro mapu a obtížnost (B-85)
         prev_best = progression.endless_record(app.save, run.biome.id, run.cfg.difficulty)
         self.msgs = progression.apply_results(app.save, run, self.rewards)
@@ -66,9 +67,8 @@ class ResultsScene(Scene):
             w = app.save["weekly"]
             if w.get("last_claim_week") != wk:
                 w["last_claim_week"] = wk
-                app.save["gold"] += 3
-                app.save["tokens"] += 2
-                self.msgs.insert(0, "Týdenní boss rush: +3 zlatá vejce, +2 žetony")
+                app.save["tokens"] += WEEKLY_RUSH_TOKENS          # zlatá vejce jen za bosse a výzvy
+                self.msgs.insert(0, f"Týdenní boss rush: +{WEEKLY_RUSH_TOKENS} žetony")
             w["best"] = max(w.get("best", 0), self.score)
             app.save.save()
         y = H - 250

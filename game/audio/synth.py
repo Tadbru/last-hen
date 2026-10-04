@@ -267,6 +267,10 @@ def sfx_library() -> dict[str, np.ndarray]:
     add("avalanche", lowpass(noise(0.5, 21), 30) * env(n, 0.15, 0.1, 0.8, 0.2), 0.7)
     n = _n(0.18)
     add("stamp", wave("square", sweep(140, 60, 0.18), 0.18) * decay(n, 15) + noise(0.18, 22) * decay(n, 40) * 0.6, 0.7)
+    # Lesklé cetky: švih + skleněné „tink“ – vlastní zvuk, ať hod nezní jako sebraná mince (B-102)
+    n = _n(0.12)
+    add("trinket", highpass(noise(0.12, 23), 4) * env(n, 0.02, 0.02, 0.4, 0.05) * 0.5
+        + wave("sine", sweep(2600, 3200, 0.12), 0.12) * decay(n, 45) * 0.35, 0.35)
     _ult_sounds(add)
     return L
 
@@ -313,6 +317,15 @@ def _ult_sounds(add) -> None:
     wind = highpass(lowpass(noise(1.0, 35), 3), 30) * env(n, 0.2, 0.1, 0.7, 0.45)
     cry = concat(*[wave("sine", midi(m), 0.09) * decay(_n(0.09), 18) for m in (96, 103, 100, 108, 105)])
     add("ult_penguin", mix(wind, concat(silence(0.15), cry * 0.7)), 0.6)
+    # straka: „čača-čača“ (rychlé ostré cvrčky) + cinkot mincí
+    parts = []
+    for i in range(6):
+        d = 0.055
+        c = highpass(noise(d, 40 + i), 2) * decay(_n(d), 30) * 0.6
+        c = c + wave("square", sweep(2300 - i * 60, 1500, d), d, 0.3) * decay(_n(d), 25) * 0.5
+        parts += [c, silence(0.035 if i % 2 == 0 else 0.07)]
+    jingle = concat(*[wave("sine", midi(m), 0.08) * decay(_n(0.08), 14) for m in (88, 95, 91, 100)])
+    add("ult_magpie", concat(*parts, jingle), 0.6)
     # roztříštění ledu
     n = _n(0.35)
     sh = highpass(noise(0.35, 36), 2) * decay(n, 14)

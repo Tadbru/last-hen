@@ -169,15 +169,36 @@ UU.UUUwwwwww.
 ...oo...oo...
 """))
 
+MAGPIE = dict(body="""
+...........kkk..
+..........kkkkk.
+..........kkxkmm
+..........kkkk..
+tt.......kkkk...
+.ttt....kkwwk...
+..tttkkkkwwwwk..
+...tkkkqqwwwwk..
+....kkqqqwwwwk..
+.....kkqqwwwk...
+......kkwwwk....
+.......kkkk.....
+""", legs=("""
+........m..m....
+.......mm.mm....
+""", """
+.......m....m...
+......mm...mm...
+"""), palette={"k": (52, 50, 72), "x": (255, 255, 255)})
+
 PLAYER_MAPS = {
     "hen": HEN, "duck": DUCK, "goose": GOOSE, "turkey": TURKEY,
-    "rooster": ROOSTER, "peacock": PEACOCK, "penguin": PENGUIN,
+    "rooster": ROOSTER, "peacock": PEACOCK, "penguin": PENGUIN, "magpie": MAGPIE,
 }
 
 # Špička zobáku v mapě těla (art px, sloupec / řádek, postava hledí doprava) – odtud střílí Zobák-laser
 PLAYER_BEAK = {
     "hen": (14, 4), "duck": (14, 4.5), "goose": (14, 2.5), "turkey": (14, 4),
-    "rooster": (13, 4), "peacock": (15, 3.5), "penguin": (10, 2.5),
+    "rooster": (13, 4), "peacock": (15, 3.5), "penguin": (10, 2.5), "magpie": (15, 2),
 }
 _beak_cache: dict = {}
 
@@ -211,8 +232,8 @@ SKIN_HATS = {
     "pirate": ("""
 ..kkkk..
 .kkwkkk.
-kkkkkkkk
-""", {}),
+yyyyyyyy
+""", {}),      # zlatý lem – černý klobouk na tmavé hlavě Straky splýval (B-108)
     "cowboy": ("""
 ...bbb...
 ..bbbbb..
@@ -243,6 +264,43 @@ wwwwwww
 .w...w.
 .n...n.
 .w...w.
+""", {}),
+    # tajné skiny za kompletní kategorie sbírky
+    "ushanka": ("""
+..OOOOO..
+.OoooooO.
+OoooooooO
+wwwwwwwww
+Oo.....oO
+""", {}),
+    "crown": ("""
+y..y..y
+yy.y.yy
+yyyyyyy
+yryyyry
+YYYYYYY
+""", {}),
+    "helmet": ("""
+...ZZZ...
+.ZZzzzZZ.
+ZzzzzzzzZ
+ZZZZZZZZZ
+""", {}),
+    "halo": ("""
+..yyyyy..
+.y.....y.
+..yyyyy..
+.........
+.........
+""", {}),
+    "wizard": ("""
+.....p...
+....pp...
+...ppp...
+...pyp...
+..ppppp..
+.ppppppp.
+PPPPPPPPP
 """, {}),
 }
 
@@ -528,6 +586,13 @@ wWW....
 ...ttp.
 .yyrr..
 rrr....
+""", {}),
+    "trinket": ("""
+..ss.
+.ssss
+..ss.
+.s...
+s....
 """, {}),
     "feather_t": ("""
 .....yy

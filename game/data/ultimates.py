@@ -89,9 +89,17 @@ ULTIMATES: dict[str, UltDef] = {u.id: u for u in [
            evo_params=dict(dur=4.5, radius=250)),
 ]}
 
+ULTIMATES["heist"] = UltDef(
+    "heist", "Velká loupež", "LOUPEŽ",
+    "Oslní lišky kolem třpytem, okrade je o mince a stáhne k sobě všechno zrní.",
+    "Čača-čača!", "ult_heist", (150, 190, 255), "ult_magpie",
+    kills=70, min_cd=9.0, cd_floor=6.0, evo="treasure", shake=0.3,
+    params=dict(radius=260, dmg=30, hp_pct=0.40, stun=1.8, coin=0.25, coins_max=12, loot=650),  # B-101
+    evo_params=dict(radius=320, coin=0.4, coins_max=18))
+
 # zvíře → ultimátka (chybějící zvíře dostane klasické kokrhání)
 ULT_BY_CHAR = {"hen": "egg_rain", "duck": "flood", "goose": "goose_fury", "turkey": "thanksgiving",
-               "rooster": "kikiriki", "peacock": "hypno", "penguin": "ice_age"}
+               "rooster": "kikiriki", "peacock": "hypno", "penguin": "ice_age", "magpie": "heist"}
 DEFAULT_ULT = "kikiriki"
 
 

@@ -93,9 +93,20 @@ tests/smoke_test.py        headless smoke testy všech systémů
 - **Mapy**: Farma od začátku; další se odemknou výhrou na předchozí mapě nebo koupí za vejce.
 - **Rubber-banding**: smrt před 1:30 → další run začíná s bonusem XP (1 úroveň zdarma).
 - **Mince** v runu (skip, bedny, Zlatá bomba) se na konci převedou na vejce 1:1.
-- **Zlatá vejce**: bossové, výzvy, denní série, 100% sbírky. **Žetony**: denní výzva + denní login → truhly v Obchodě.
-- **Denní výzva**: seed = datum, jedna šance denně, mapa a modifikátor pro všechny stejné, zvíře si hráč vybere ze všech odemčených (dnešní zvíře výzvy je výchozí a dá se zapůjčit i zamčené – změna 4. 10. 2026); lokální žebříček top 10 = vlastní výsledky + deterministicky generovaní „sousedé“ z vesnice (offline hra nemá server).
-- **Týdenní boss rush**: všichni bossové za sebou, start s 10 level-upy zdarma (bossové sypou XP), odměna jednou za ISO týden.
+- **Zlatá vejce** (od 4. 10. 2026 vzácná): jen za první porážku každého bosse (finální Kohout zvlášť na každé mapě,
+  klíč v `save["boss_gold"]`) a za výzvy. Denní login, týdenní boss rush a truhly za žetony dávají místo nich
+  vejce/žetony, sbírka tajné skiny. **Žetony**: denní výzva + denní login + týdenní boss rush → truhly v Obchodě.
+- **Sbírka** (4. 10. 2026): každá kompletní kategorie odhalí tajný skin (Liščí ušanka, Koruna dvora, Vojenská helma,
+  Svatozář, Čarodějný klobouk – v Obchodě do té doby jako otazníky), celá sbírka odemkne tajné zvíře **Straka Klepna**
+  (ve výběru úplně skrytá, dokud ji hráč nezíská). Platí i zpětně pro dřív dokončené kategorie. Straka a její
+  zbraně/evoluce do sbírky nepatří (jinak by 100 % nešlo splnit). Zbraň Lesklé cetky (odrazy mezi liškami),
+  pasivka Zlodějka (mince 6 % ze zabití, +50 % sběr), ultimátka Velká loupež, slabina 90 % životů.
+- **Truhly v runu** (4. 10. 2026): sebraná truhla se otevře hned a do rozestupu 8 s (`PAUSE_GAP`) mezi level-upy se
+  nepočítá – rozestup neobnoví, nezkrátí, a čekající level-up po ní počká, až rozestup doběhne.
+- **Denní výzva**: seed = datum, jedna šance denně, zvíře dne, mapa a modifikátor pro všechny stejné (zamčené zvíře dne se zapůjčí); lokální žebříček top 10 = vlastní výsledky + deterministicky generovaní „sousedé“ z vesnice (offline hra nemá server).
+- **Týdenní boss rush**: všichni bossové za sebou, start s 10 level-upy zdarma (bossové sypou XP), odměna jednou za ISO týden;
+  zvíře si hráč vybírá šipkami ze všech odemčených (výchozí naposledy hrané) – 4. 10. 2026 přesunuto sem z denní výzvy,
+  která má zase pevné zvíře dne (pro všechny stejné podmínky žebříčku).
 - **Sezónní témata**: automaticky podle data (říjen = Halloween, prosinec = Vánoce, březen–duben = Velikonoce), přepínatelné v Nastavení.
 - **Reklamy** jsou jen mock (falešný dialog s odpočtem), žádné SDK.
 - **Zvuk**: numpy, 22 050 Hz mono; bez numpy nebo bez audio zařízení hra běží potichu.

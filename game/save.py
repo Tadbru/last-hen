@@ -45,7 +45,7 @@ DEFAULT: dict = {
     "skin": {},
     "settings": dict(DEFAULT_SETTINGS),
     "daily": {"last_played": "", "scores": [], "login_last": "", "login_streak": 0},
-    "weekly": {"last_claim_week": "", "best": 0},
+    "weekly": {"last_claim_week": "", "best": 0, "char": ""},   # char: zvíře posledního boss rushe
     "rubber_band": False,
     "played_biomes": [],
     "last_char": "hen",
@@ -53,6 +53,7 @@ DEFAULT: dict = {
     "last_mode": "quick",
     "last_diff": "normal",
     "seen_intro": False,
+    "boss_gold": [],             # bossové (Kohout podle mapy), za které už padla zlatá vejce
 }
 
 

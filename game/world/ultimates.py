@@ -13,7 +13,7 @@ from .. import assets
 from ..data import waves as WV
 from ..data.enemies import ENEMIES
 from ..data.ultimates import ULT_BOSS_CAP, ULT_NAME_GAP, UltDef
-from .entities import M_LOB
+from .entities import M_LOB, P_COIN, P_GOLDEGG, P_XP, Pickup
 
 TAU = math.tau
 EFFECTS: dict = {}
@@ -683,3 +683,42 @@ def ice_age(run, src, s) -> None:
     run.particles.flakes(p.x, p.y - 10, 16, 200)
     run.particles.glow(p.x, p.y - 14, 70, (150, 210, 255), 0.25)
     run.add_ring(p.x, p.y, 10, s["radius"] * p.stats.area, 0.4, (220, 245, 255), 8)
+
+
+# =============================================================================================
+# Straka Klepna – Velká loupež: oslní lišky kolem, okrade je o mince a stáhne k sobě zrní
+# =============================================================================================
+@effect("heist")
+def heist(run, src, s) -> None:
+    p = run.player
+    st = p.stats
+    r = s["radius"] * st.area
+    rng = run.rng
+    coins = 0
+    for e in list(run.enemies):         # přímo seznam: okamžitý efekt nesmí záviset na tom, zda je mřížka už postavená
+        if not e.alive or e.prop:
+            continue
+        dx, dy = e.x - p.x, e.y - p.y
+        if dx * dx + dy * dy >= (r + e.r) ** 2:
+            continue
+        pct = 0.0 if e.boss else s["hp_pct"]
+        run.damage_enemy(e, s["dmg"] * st.might + pct * e.max_hp, src, dx, dy, 120, False, stun=s["stun"])
+        if not e.boss and coins < s["coins_max"] and rng.random() < s["coin"]:
+            # kapsářka: oslněná liška upustí minci, která rovnou letí ke strace
+            coins += 1
+            pk = Pickup(e.x, e.y, P_COIN, 1)
+            pk.vz = 140
+            pk.z = 1
+            pk.attract = True
+            run.pickups.append(pk)
+            run.particles.sparkle(e.x, e.y - 12, (255, 220, 90), 2)
+    loot = s["loot"]
+    for pk in run.pickups:
+        if pk.kind in (P_XP, P_GOLDEGG, P_COIN) and (pk.x - p.x) ** 2 + (pk.y - p.y) ** 2 < loot * loot:
+            pk.attract = True               # „všechno, co se třpytí, je moje“
+    run.add_ring(p.x, p.y, 10, r, 0.4, (180, 210, 255), 8)
+    run.add_ring(p.x, p.y, 10, r * 0.6, 0.3, (255, 236, 150), 4)
+    run.particles.burst_ring(p.x, p.y - 16, 18, (255, 236, 150), 260)
+    run.particles.stars(p.x, p.y - 20, 14, (200, 225, 255), 300)
+    run.particles.glow(p.x, p.y - 14, 70, (170, 200, 255), 0.25)
+    run.particles.feathers(p.x, p.y - 10, 10, (60, 60, 80), 220)

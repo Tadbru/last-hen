@@ -31,7 +31,7 @@ PICKUP_GLOW = {P_GOLDEGG: (255, 200, 60), P_CHEST: (255, 210, 110), P_MAGNET: (2
 
 # kotvy klobouků skinů (art px relativně k levému hornímu rohu spritu bez obrysu): (střed x, horní y)
 HAT_ANCHOR = {"hen": (10.5, 1.5), "duck": (9.0, 2.0), "goose": (11.0, 0.5), "turkey": (11.5, 1.5),
-              "rooster": (11.0, 0.5), "peacock": (13.0, 2.5), "penguin": (6.0, 0.5)}
+              "rooster": (11.0, 0.5), "peacock": (13.0, 2.5), "penguin": (6.0, 0.5), "magpie": (12.0, 0.5)}
 
 
 class RunRenderer:

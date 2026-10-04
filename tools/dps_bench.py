@@ -65,9 +65,9 @@ def main() -> None:
     pygame.init()
     from game import assets
     assets.init(headless_sim=True, audio_enabled=False)
-    from game.data.weapons import ALL_BASE, WEAPONS
+    from game.data.weapons import ALL_BASE, SECRET_WEAPONS, WEAPONS
     print(f"{'zbraň':18s} {'L1 1×':>7s} {'L4 1×':>7s} {'L8 1×':>7s} {'EVO 1×':>7s} | {'L1 AoE':>7s} {'L8 AoE':>8s} {'EVO AoE':>8s}")
-    for wid in ALL_BASE:
+    for wid in ALL_BASE + SECRET_WEAPONS:
         d = WEAPONS[wid]
         s1 = bench(wid, 1, "single")
         s4 = bench(wid, 4, "single")

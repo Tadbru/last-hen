@@ -71,7 +71,14 @@ SKINS = [
     dict(id="pumpkin", name="Dýňová hlava", price=0, season="halloween"),
     dict(id="santa", name="Santa", price=0, season="christmas"),
     dict(id="bunny", name="Zajíček", price=0, season="easter"),
+    # tajné skiny: v obchodě jako otazníky, každý odhalí kompletní kategorie sbírky (secret = kategorie)
+    dict(id="ushanka", name="Liščí ušanka", short="Ušanka", price=0, season=None, secret="enemies"),
+    dict(id="crown", name="Koruna dvora", short="Koruna", price=0, season=None, secret="bosses"),
+    dict(id="helmet", name="Vojenská helma", short="Helma", price=0, season=None, secret="weapons"),
+    dict(id="halo", name="Svatozář", short="Svatozář", price=0, season=None, secret="evolutions"),
+    dict(id="wizard", name="Čarodějný klobouk", short="Čaroděj", price=0, season=None, secret="passives"),
 ]
+SECRET_SKIN_BY_CAT = {s["secret"]: s for s in SKINS if s.get("secret")}
 SKIN_BY_ID = {s["id"]: s for s in SKINS}
 
 SEASONS = {
@@ -83,7 +90,7 @@ SEASONS = {
 # --- Denní login (cyklus 7 dní) ------------------------------------------------------------
 LOGIN_REWARDS = [
     dict(eggs=50), dict(tokens=1), dict(eggs=100), dict(tokens=1), dict(eggs=150), dict(tokens=2),
-    dict(eggs=250, gold=1),
+    dict(eggs=250, tokens=1),                 # zlatá vejce jen za bosse a výzvy (4. 10. 2026)
 ]
 
 # --- Truhla za žeton ------------------------------------------------------------------------
@@ -105,7 +112,11 @@ NEIGHBOURS = ["Farmář Franta", "Babička Božka", "Kohout Karel", "Kačer Don�
               "Strejda Lojza", "Pes Alík", "Kocour Mikeš", "Prase Pepa", "Kráva Stáňa", "Koza Líza",
               "Beran Béďa", "Holub Hugo", "Králík Kuba"]
 
-COLLECTION_REWARD_GOLD = 3      # za 100 % kategorie sbírky
+# Zlatá vejce jsou vzácná: jen za PRVNÍ porážku každého bosse (finálního Kohouta zvlášť na každé mapě – každá
+# mapa má jeho jinou variantu) a za výzvy. Sbírka dává místo nich tajné skiny a na 100 % Straku.
+BOSS_GOLD_MINI = 1
+BOSS_GOLD_FINAL = 2
+WEEKLY_RUSH_TOKENS = 3          # týdenní boss rush (dřív 3 zlatá + 2 žetony)
 
 # Ekonomika výsledků runu
 EGGS_PER_10S = 2

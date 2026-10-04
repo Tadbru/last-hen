@@ -65,6 +65,12 @@ CHARACTERS: dict[str, CharDef] = {c.id: c for c in [
             "Ledová krev", "Zmražené lišky od něj dostanou o 30 % víc.",
             "O 5 % pomalejší.", "secret", "Tajemství… zkus klepat na logo", 0,
             hp=1.0, speed=0.95, special="frost", color=(80, 140, 230)),   # dřív „slide“ – klouzání zrušeno
+    # tajné zvíře: ve výběru úplně skryté, dokud hráč nedoplní celou sbírku (progression.check_collection)
+    CharDef("magpie", "Straka Klepna", True, "trinkets",
+            "Krade všechno, co se třpytí. Lišky si před ní hlídají kapsy.",
+            "Zlodějka", "Lišky jí občas upustí minci, zrní sbírá z větší dálky.",
+            "Jen 90 % životů.", "collection", "Doplň celou sbírku", 0,
+            hp=0.9, special="thief", color=(150, 190, 255)),
 ]}
 
-CHAR_ORDER = ["hen", "duck", "goose", "turkey", "rooster", "peacock", "penguin"]
+CHAR_ORDER = ["hen", "duck", "goose", "turkey", "rooster", "peacock", "penguin", "magpie"]

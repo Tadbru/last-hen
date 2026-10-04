@@ -59,6 +59,11 @@ class App:
         self._open_window()
         self.screen = pygame.Surface((W, H))
         self.save = SaveData(save_path, persist) if save_path else SaveData(persist=persist)
+        from . import progression
+        # zpětně: tajné skiny / Straka za sbírku dokončenou dřív – zprávy ukáže menu (B-103)
+        self.startup_msgs: list[str] = progression.check_collection(self.save)
+        if self.startup_msgs:
+            self.save.save()
         assets.init(headless_sim=False, audio_enabled=True)
         self.apply_settings()
         self.clock = pygame.time.Clock()

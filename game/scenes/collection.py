@@ -97,7 +97,10 @@ class CollectionScene(Scene):
         have, total = progression.collection_progress(self.save)
         font.draw(surf, f"Objeveno {have}/{total} ({int(100 * have / max(1, total))} %)", (W // 2, 74),
                   (210, 210, 230), 2, "midtop")
-        font.draw(surf, "100 % kategorie = 3 zlatá vejce", (W // 2, 100), (255, 214, 120), 2, "midtop")
+        # odměny sbírky (B-99): kategorie = tajný skin v Obchodě, celá sbírka = tajné zvíře (do odhalení „???“)
+        secret = "Straka" if "magpie" in self.save["unlocked_chars"] else "???"
+        font.draw(surf, font.fit(f"100 % kategorie = tajný skin · vše = {secret}", W - 32, 2), (W // 2, 100),
+                  (255, 214, 120), 2, "midtop")
         r = self.scroll.rect
         clip = surf.get_clip()
         surf.set_clip(r)

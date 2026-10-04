@@ -12,6 +12,7 @@ from ..gfx.sprites import beak_offset
 BASE_HP = 100.0
 BASE_SPEED = 150.0
 BASE_MAGNET = 72.0
+THIEF_MAGNET = 1.5          # Straka (Zlodějka): +50 % dosah sběru
 
 
 class Stats:
@@ -87,6 +88,8 @@ class Player:
         st.max_hp = BASE_HP * c.hp * (1 + NEST_BY_ID["hp"]["step"] * m.get("hp", 0) + PASSIVES["grain"].step * lv("grain"))
         st.speed = BASE_SPEED * c.speed * (1 + NEST_BY_ID["speed"]["step"] * m.get("speed", 0) + PASSIVES["legs"].step * lv("legs"))
         st.magnet = BASE_MAGNET * (1 + NEST_BY_ID["magnet"]["step"] * m.get("magnet", 0) + PASSIVES["magnet"].step * lv("magnet"))
+        if c.special == "thief":
+            st.magnet *= THIEF_MAGNET          # Straka: zrní sbírá z větší dálky
         st.might = c.might * (1 + NEST_BY_ID["dmg"]["step"] * m.get("dmg", 0) + PASSIVES["shell"].step * lv("shell"))
         st.might *= self.run.mod_dmg_mult
         if self.run.night_power:

@@ -162,7 +162,8 @@ def chars_x_biomes():
     for ci, ch in enumerate(CHAR_ORDER):
         for bi, bm in enumerate(BIOME_ORDER):
             run = Run(RunConfig(character=ch, biome=bm, mode="full" if (ci + bi) % 2 else "quick", seed=ci * 7 + bi,
-                                skin=["pirate", "cowboy", "astronaut", "ninja", "pumpkin", "santa", "bunny"][ci],
+                                skin=["pirate", "cowboy", "astronaut", "ninja", "pumpkin", "santa", "bunny", "crown",
+                                      "halo"][ci % 9],
                                 season=[None, "halloween", "christmas", "easter", None][bi]))
             run.time = 100 + bi * 60
             ren = RunRenderer(run)
@@ -671,7 +672,7 @@ def endless_night():
     r2 = Run(RunConfig(mode="endless", seed=1))
     r2.bosses_killed = ["zombie_rooster", "spy_fox", "zombie_rooster"]
     rw = progression.compute_rewards(r2)
-    assert rw["gold"] == 1 + 2 * 2, rw
+    assert rw["gold"] == 1 + 2, rw          # zlatá vejce za každého bosse jen jednou (Kohout jednou na mapu)
     # starý save bez klíče rekordu se načte s výchozí hodnotou
     from game.save import SaveData
     old = os.path.join(TMP, "old_save.json")
@@ -945,34 +946,49 @@ def fixed_joystick_anywhere():
 
 
 @test
-def daily_character_choice():
-    """Denní výzva: zvíře jde vybrat ze všech odemčených (+ dnešní zvíře výzvy), mapa a modifikátor zůstávají."""
+def daily_fixed_rush_character_choice():
+    """Denní výzva hraje vždy zvíře dne (i zamčené, zapůjčené); týdenní boss rush si zvíře vybírá
+    šipkami ze všech odemčených."""
     a = app()
     from game.config import DT
     from game.scenes.daily import DailyScene
     from game.scenes.game import GameScene
     s = a.save
-    old = (list(s["unlocked_chars"]), s["daily"].get("last_played", ""))
+    old = (list(s["unlocked_chars"]), s["daily"].get("last_played", ""), s["last_char"], s["weekly"].get("char", ""))
     try:
+        s["weekly"]["char"] = ""
         s["unlocked_chars"] = ["hen", "turkey", "penguin"]
         s["daily"]["last_played"] = ""
+        s["last_char"] = "turkey"
         sc = DailyScene(a)
         a.set_scene(sc)
         spec = sc.spec
-        assert sc.char_id == spec["character"], "výchozí je dnešní zvíře"
-        assert set(sc.chars) == {"hen", "turkey", "penguin", spec["character"]}
+        assert sc.chars == ["hen", "turkey", "penguin"], sc.chars
+        assert sc.rush_char == "turkey", "výchozí je naposledy hrané zvíře"
         sc.pick(1)
-        chosen = sc.char_id
-        assert chosen != spec["character"] or len(sc.chars) == 1
+        assert sc.rush_char == "penguin"
+        sc.pick(1)
+        assert sc.rush_char == "hen", "šipky dokola"
+        sc.pick(-1)
         sc.play_daily()
         for _ in range(40):
             a.step(DT)
         gs = a.scene
         assert isinstance(gs, GameScene), type(gs)
-        assert gs.cfg.character == chosen and gs.cfg.mode == "daily", (gs.cfg.character, chosen)
+        assert gs.cfg.character == spec["character"] and gs.cfg.mode == "daily", gs.cfg.character
         assert gs.cfg.biome == spec["biome"] and gs.cfg.modifiers == (spec["modifier"],) and gs.cfg.seed == spec["seed"]
+        sc = DailyScene(a)
+        a.set_scene(sc)
+        sc.pick(1)
+        sc.play_rush()
+        for _ in range(40):
+            a.step(DT)
+        gs = a.scene
+        assert isinstance(gs, GameScene), type(gs)
+        assert gs.cfg.character == "penguin" and gs.cfg.mode == "bossrush", (gs.cfg.character, gs.cfg.mode)
+        assert DailyScene(a).rush_char == "penguin", "boss rush si pamatuje zvíře (B-106)"
     finally:
-        s["unlocked_chars"], s["daily"]["last_played"] = old
+        s["unlocked_chars"], s["daily"]["last_played"], s["last_char"], s["weekly"]["char"] = old
 
 
 @test
@@ -1019,6 +1035,167 @@ def goose_whip_and_penguin_no_slide():
     hp = e.hp
     run.damage_enemy(e, 100, None, crit=False)
     assert abs((hp - e.hp) - plain * 1.3) < 1e-6, (plain, hp - e.hp)
+
+
+@test
+def chest_now_gold_rare_secret_skins_magpie():
+    """Truhla se otevře hned po sebrání (pauza jen pro level-upy); zlatá vejce jen za první porážku bosse;
+    kompletní kategorie sbírky odhalí tajný skin, celá sbírka odemkne skrytou Straku."""
+    a = app()
+    from game import progression
+    from game.config import DT
+    from game.data.meta import LOGIN_REWARDS, SECRET_SKIN_BY_CAT, SKINS
+    from game.save import SaveData
+    from game.scenes.select import SelectScene
+    from game.scenes.shop import ShopScene
+    from game.world.entities import P_CHEST, Pickup
+    from game.world.run import Run, RunConfig
+    # truhla hned, i když běží rozestup mezi level-upy; do rozestupu se nepočítá (B-100)
+    run = Run(RunConfig(character="hen", mode="full", seed=3, headless=True))
+    run.director.update = lambda dt: None
+    run.pause_cd = 6.0
+    run.pending_levelups = 2                # XP nasbírané během rozestupu
+    run.pickups.append(Pickup(run.player.x + 5, run.player.y, P_CHEST, 1))
+    run.update(DT)
+    run.update(DT)
+    assert run.state == "chest", run.state
+    cd = run.pause_cd
+    run.resume()
+    assert run.state == "playing", "po truhle level-up nenaskočí, dokud neuběhne rozestup"
+    assert abs(run.pause_cd - cd) < 1e-9, "truhla rozestup neobnoví ani nezkrátí"
+    run.pause_cd = 0.0
+    run.update(DT)
+    assert run.state == "levelup", "po doběhnutí rozestupu se level-up ukáže"
+    # bez čekajícího level-upu: rozestup po truhle běží dál od stejného místa
+    run.resume()
+    assert run.pause_cd > 7.9 and run.state in ("playing", "levelup")
+    # zlatá vejce: každý boss jen jednou, finální Kohout zvlášť pro každou mapu
+    s = SaveData(os.path.join(TMP, "gold.json"))
+    r = Run(RunConfig(mode="full", biome="farm", seed=1, headless=True))
+    r.bosses_killed = ["spy_fox", "zombie_rooster"]
+    rw = progression.compute_rewards(r, s)
+    assert rw["gold"] == 3, rw
+    progression.apply_results(s, r, rw)
+    assert progression.compute_rewards(r, s)["gold"] == 0, "druhá porážka už zlatá vejce nedá"
+    r2 = Run(RunConfig(mode="full", biome="forest", seed=1, headless=True))
+    r2.bosses_killed = ["spy_fox", "zombie_rooster"]
+    assert progression.compute_rewards(r2, s)["gold"] == 2, "Kohout na jiné mapě je jiná varianta"
+    assert not any("gold" in d for d in LOGIN_REWARDS), "denní přihlášení zlatá vejce nedává"
+    # sbírka: tajné skiny a Straka (skrytá, dokud ji hráč nezíská)
+    assert "magpie" not in progression.visible_chars(s)
+    for cat, (_, items) in progression.COLLECTION_CATS.items():
+        if cat != "passives":
+            for it in items:
+                s.discover(cat, it)
+    msgs = progression.check_collection(s)
+    assert SECRET_SKIN_BY_CAT["bosses"]["id"] in s["skins_owned"], msgs
+    assert SECRET_SKIN_BY_CAT["passives"]["id"] not in s["skins_owned"]
+    assert "magpie" not in s["unlocked_chars"]
+    for it in progression.COLLECTION_CATS["passives"][1]:
+        s.discover("passives", it)
+    msgs = progression.check_collection(s)
+    assert "magpie" in s["unlocked_chars"] and any("Straka" in m for m in msgs), msgs
+    assert "magpie" in progression.visible_chars(s)
+    assert progression.check_collection(s) == [], "odměny jen jednou"
+    # výběr a obchod ve skutečných scénách
+    real = (list(a.save["unlocked_chars"]), list(a.save["skins_owned"]), dict(a.save["skin"]))
+    try:
+        a.save["unlocked_chars"] = ["hen", "duck"]
+        sel = SelectScene(a)
+        assert "magpie" not in sel.order and len(sel.order) == 7, sel.order
+        a.save["unlocked_chars"] = ["hen", "magpie"]
+        sel = SelectScene(a)
+        assert sel.order[-1] == "magpie"
+        a.save["skins_owned"] = []
+        shop = ShopScene(a)
+        a.set_scene(shop)
+        assert len(shop.tiles) == 5 and len(shop.rows) == len([x for x in SKINS if not x.get("secret")])
+        sk, tile = shop.tiles[0]
+        shop.secret_action(sk)
+        assert a.save["skin"].get(shop.char) != sk["id"], "zamčený tajný skin nejde nasadit"
+        a.save["skins_owned"] = [sk["id"]]
+        shop.secret_action(sk)
+        assert a.save["skin"].get(shop.char) == sk["id"]
+        for _ in range(5):
+            a.step(DT)
+        a.render()
+    finally:
+        a.save["unlocked_chars"], a.save["skins_owned"] = real[0], real[1]
+        a.save["skin"].clear()
+        a.save["skin"].update(real[2])
+
+
+@test
+def round8_regressions():
+    """B-99 – B-109: texty sbírky, Velká loupež, zvuk cetek, zprávy při startu, skloňování, skiny, pirát."""
+    a = app()
+    from game import assets, progression
+    from game.config import DT
+    from game.data.ultimates import ULTIMATES
+    from game.data.weapons import WEAPONS
+    from game.save import SaveData
+    from game.scenes.collection import CollectionScene
+    from game.scenes.menu import MenuScene
+    from game.scenes.shop import ShopScene
+    from game.world.run import Run, RunConfig
+    import inspect
+    from game.scenes import collection as coll_mod
+    from game.weapons import kinds
+    # B-99: Sbírka už neslibuje zlatá vejce
+    assert "zlatá vejce" not in inspect.getsource(coll_mod)
+    a.set_scene(CollectionScene(a))
+    a.step(DT)
+    a.render()
+    # B-101: Velká loupež zabije běžnou lišku ve 3. minutě
+    run = Run(RunConfig(character="magpie", mode="full", seed=4, headless=True))
+    run.director.update = lambda dt: None
+    run.time = 180
+    e = run.spawn_enemy("fox", 60, 0)
+    s = ULTIMATES["heist"].params
+    assert s["dmg"] + s["hp_pct"] * e.max_hp >= e.max_hp, (s, e.max_hp)
+    # B-102: cetky mají vlastní zvuk, ne „coin“
+    assert 'run.sfx("coin"' not in inspect.getsource(kinds.BounceWeapon)
+    assert WEAPONS["trinkets"].sound != "coin"
+    if assets.audio is not None and getattr(assets.audio, "sounds", None):
+        assert "trinket" in assets.audio.sounds
+    # B-103: zprávy ze zpětného odemčení ukáže menu
+    old_suppress = MenuScene.suppress_login
+    try:
+        MenuScene.suppress_login = False
+        a.save["daily"]["login_last"] = progression.today().isoformat()     # dnes už odměna byla
+        a.startup_msgs = ["Tajný skin v Obchodě: Koruna dvora!"]
+        m = MenuScene(a)
+        a.set_scene(m)
+        assert m.modal is not None and "Koruna" in m.modal.text, getattr(m.modal, "text", None)
+        assert a.startup_msgs == [], "zpráva jen jednou"
+    finally:
+        MenuScene.suppress_login = old_suppress
+    a.set_scene(MenuScene(a))
+    # B-104: skloňování zlatých vajec
+    sv = SaveData(os.path.join(TMP, "gold8.json"))
+    r = Run(RunConfig(mode="bossrush", biome="farm", seed=1, headless=True))
+    r.bosses_killed = ["spy_fox", "rabbit", "zombie_bear", "wolf_alpha", "zombie_rooster"]
+    msgs = progression.apply_results(sv, r, progression.compute_rewards(r, sv))
+    assert "První porážka bossů: +6 zlatých vajec" in msgs, msgs
+    # B-105: neutrální hláška u tajných skinů
+    real = (list(a.save["skins_owned"]), dict(a.save["skin"]))
+    try:
+        a.save["skins_owned"] = ["crown"]
+        shop = ShopScene(a)
+        a.set_scene(shop)
+        sk = next(s for s, _ in shop.tiles if s["id"] == "crown")
+        shop.secret_action(sk)
+        assert a.save["skin"].get(shop.char) == "crown"
+        shop.secret_action(sk)
+        assert a.save["skin"].get(shop.char) is None
+    finally:
+        a.save["skins_owned"] = real[0]
+        a.save["skin"].clear()
+        a.save["skin"].update(real[1])
+    assert "nasazen\"" not in inspect.getsource(ShopScene)
+    # B-108: pirátský klobouk má světlý lem
+    from game.gfx.sprites import SKIN_HATS
+    assert "y" in SKIN_HATS["pirate"][0]
 
 
 @test

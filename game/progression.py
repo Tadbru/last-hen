@@ -278,7 +278,19 @@ def open_chest(run, kind: str = "elite") -> dict:
 # ---------------------------------------------------------------------------------------------
 # ODMĚNY PO RUNU
 # ---------------------------------------------------------------------------------------------
-def compute_rewards(run) -> dict:
+def boss_gold_keys(run, save=None) -> list[str]:
+    """Bossové z tohoto runu, za které ještě nepadla zlatá vejce (každý jen jednou; finální Kohout zvlášť
+    pro každou mapu – každá má jeho jinou variantu)."""
+    done = set(save["boss_gold"]) if save is not None else set()
+    out: list[str] = []
+    for b in run.bosses_killed:
+        k = f"zombie_rooster:{run.biome.id}" if b == "zombie_rooster" else b
+        if k not in done and k not in out:
+            out.append(k)
+    return out
+
+
+def compute_rewards(run, save=None) -> dict:
     t = run.time
     lines = []
     eggs_time = int(t / 10) * M.EGGS_PER_10S
@@ -302,8 +314,9 @@ def compute_rewards(run) -> dict:
         lines.append(("Mince", eggs_coins))
     base = eggs_time + eggs_kills + eggs_boss + eggs_win + eggs_coins
     total = int(base * mult)
-    gold = len(minis) + 2 * finals
-    return dict(lines=lines, base=base, mult=mult, eggs=total, gold=gold)
+    keys = boss_gold_keys(run, save)
+    gold = sum(M.BOSS_GOLD_FINAL if k.startswith("zombie_rooster") else M.BOSS_GOLD_MINI for k in keys)
+    return dict(lines=lines, base=base, mult=mult, eggs=total, gold=gold, gold_keys=keys)
 
 
 def score(run) -> int:
@@ -318,6 +331,14 @@ def apply_results(save, run, rewards: dict) -> list[str]:
     rec = d["records"]
     d["eggs"] += rewards["eggs"]
     d["gold"] += rewards["gold"]
+    for k in rewards.get("gold_keys", []):
+        if k not in d["boss_gold"]:
+            d["boss_gold"].append(k)
+    if rewards["gold"]:
+        n = rewards["gold"]
+        word = "zlaté vejce" if n == 1 else "zlatá vejce" if n < 5 else "zlatých vajec"     # B-104
+        who = "bosse" if len(rewards.get("gold_keys", [])) <= 1 else "bossů"
+        msgs.append(f"První porážka {who}: +{n} {word}")
     rec["total_eggs"] += rewards["eggs"]
     rec["runs"] += 1
     rec["total_kills"] += run.kills
@@ -444,16 +465,32 @@ def collection_progress(save) -> tuple[int, int]:
     return have, total
 
 
+def visible_chars(save) -> list[str]:
+    """Zvířata pro výběr: tajné zvíře za sbírku (unlock == "collection") se ukáže, až ho hráč získá."""
+    from .data.characters import CHAR_ORDER
+    return [c for c in CHAR_ORDER if CHARACTERS[c].unlock != "collection" or c in save["unlocked_chars"]]
+
+
 def check_collection(save) -> list[str]:
+    """Kompletní kategorie sbírky odhalí tajný skin (dřív 3 zlatá vejce); celá sbírka odemkne tajné zvíře.
+    Platí i zpětně – kategorie dokončené před touto změnou skin dostanou dodatečně."""
     msgs = []
     d = save.data
     for cat, (name, items) in COLLECTION_CATS.items():
-        if cat in d["collection_rewards"]:
-            continue
-        if all(save.is_discovered(cat, i) for i in items):
+        done = cat in d["collection_rewards"]
+        if not done and all(save.is_discovered(cat, i) for i in items):
             d["collection_rewards"].append(cat)
-            d["gold"] += M.COLLECTION_REWARD_GOLD
-            msgs.append(f"Sbírka „{name}“ kompletní! +{M.COLLECTION_REWARD_GOLD} zlatá vejce")
+            done = True
+            msgs.append(f"Sbírka „{name}“ kompletní!")
+        sk = M.SECRET_SKIN_BY_CAT.get(cat)
+        if done and sk and sk["id"] not in d["skins_owned"]:
+            d["skins_owned"].append(sk["id"])
+            msgs.append(f"Tajný skin v Obchodě: {sk['name']}!")
+    if all(c in d["collection_rewards"] for c in COLLECTION_CATS):
+        for cid, ch in CHARACTERS.items():
+            if ch.unlock == "collection" and cid not in d["unlocked_chars"]:
+                d["unlocked_chars"].append(cid)
+                msgs.append(f"Celá sbírka! Tajemství odhaleno: {ch.name} se přidává do hry!")
     return msgs
 
 

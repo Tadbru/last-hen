@@ -68,11 +68,30 @@ class MenuScene(Scene):
                     parts.append(f"{rw['gold']} zlaté vejce")
                 self.modal = Dialog(f"Den {rw['streak']} v řadě!",
                                     "Denní odměna za návštěvu farmy: " + ", ".join(parts) + ". Vrať se zítra pro další!",
-                                    [("Díky!", None, "primary")], icon="calendar")
+                                    [("Díky!", self._show_secrets, "primary")], icon="calendar")
             elif self.save.load_error and not MenuScene._load_error_shown:
                 MenuScene._load_error_shown = True
                 self.modal = Dialog("Uložená hra poškozena", "Soubor save.json byl poškozený, začínáš nanovo. "
                                     "Původní soubor jsme zálohovali.", [("OK", None, "primary")])
+            else:
+                self._show_secrets()
+
+    def _show_secrets(self) -> None:
+        """Odměny sbírky přidělené zpětně při startu hry (B-103) – jednou, po případné denní odměně."""
+        msgs = getattr(self.app, "startup_msgs", None)
+        if not msgs:
+            return
+        self.app.startup_msgs = []
+        # skiny do jedné věty, ať se „Tajný skin v Obchodě“ neopakuje pětkrát
+        pre = "Tajný skin v Obchodě: "
+        skins = [m[len(pre):].rstrip("!") for m in msgs if m.startswith(pre)]
+        rest = [m for m in msgs if not m.startswith(pre)]
+        if len(skins) > 1:
+            rest.insert(0, "Tajné skiny v Obchodě: " + ", ".join(skins) + ".")
+        elif skins:
+            rest.insert(0, pre + skins[0] + "!")
+        self.modal = Dialog("Tajemství odhaleno!", " ".join(rest), [("Paráda!", None, "primary")], icon="star")
+        assets.audio.play("fanfare")
 
     # --- akce ------------------------------------------------------------------------------------
     def play(self) -> None:

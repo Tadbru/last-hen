@@ -14,3 +14,6 @@ bin/
 dist/
 *.apk
 *.aab
+
+# game-evolver: lokální záloha (cesta k záloze mimo repo)
+.evolve/

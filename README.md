@@ -63,10 +63,10 @@ Tajemství: zkus 10× klepnout na logo v menu.
 Nekonečná noc (odemkne výhra Plného módu: prvních 10 minut jako Plný mód, pak slunce nevyjde – další noci se silnějšími
 bossy (další přijde až po porážce předchozího), lišky dál sílí, hraje se na rekord času pro každou mapu a obtížnost;
 „noční síla“ +4 % poškození za level-up s hotovým buildem),
-Denní výzva (seed z data, jeden pokus, mapa a modifikátor pro všechny stejné, zvíře podle volby, lokální žebříček), Týdenní boss rush (všech 5 bossů za sebou).
+Denní výzva (seed z data, jeden pokus, zvíře dne, mapa a modifikátor pro všechny stejné, lokální žebříček), Týdenní boss rush (všech 5 bossů za sebou, zvíře podle volby).
 Obtížnosti Normal / Hard / Nightmare.
 
-**Zvířata (7):**
+**Zvířata (7 + 1 tajné):**
 
 | Zvíře | Startovní zbraň | Pasivka | Slabina | Ultimátka | Odemčení |
 |---|---|---|---|---|---|
@@ -77,6 +77,7 @@ Obtížnosti Normal / Hard / Nightmare.
 | Kohout Elvis | Zvukové vlny | ultimátka se nabíjí 2× rychleji | křehký | Královské KIKIRIKÍ – původní kokrhání | poraz Zombie Kohouta |
 | Páv Diva | Páví vějíř | hypnóza nepřátel | o 10 % víc XP na úroveň | Božská krása – okouzlené lišky bojují za ni | výzva „Tisíc lišek“ |
 | Tajný tučňák | Mražená ryba (bumerang, mrazí) | Ledová krev – zmražené lišky od něj dostanou o 30 % víc | o 5 % pomalejší | Doba ledová – mrazivý vír kolem tučňáka | easter egg |
+| Straka Klepna (tajná) | Lesklé cetky (odrážejí se z lišky na lišku) | Zlodějka – lišky jí občas upustí minci, +50 % dosah sběru | 90 % životů | Velká loupež – oslní lišky, okrade je o mince, stáhne zrní | celá sbírka (do té doby ve výběru skrytá) |
 
 Podrobnosti ultimátek (čísla, nabíjení, měření) jsou v `FEATURES.md`.
 
@@ -103,8 +104,10 @@ variantu (Kohout Mlhoš, Kohout Kmotr, Kohout Yetti, Robokohout 3000). Všechny 
 
 **Progrese:** levelup karty (běžná/vzácná/epická = +1/+2/+3 úrovně; víc čekajících level-upů se spojí do
 jedné karty s úrovní navíc), rerol, skip za mince, vyřazení karty, bedny.
-Hnízdo (6 trvalých vylepšení × 5 úrovní), Sbírka (64 položek, odměny za 100 % kategorie), 19 výzev,
-Obchod (skiny pirát/kovboj/astronaut/ninja za zlatá vejce, truhly za žetony), denní login se sérií,
+Hnízdo (6 trvalých vylepšení × 5 úrovní), Sbírka (64 položek; každá kompletní kategorie odhalí tajný skin, celá
+sbírka tajné zvíře Straku), 19 výzev,
+Obchod (skiny pirát/kovboj/astronaut/ninja za zlatá vejce, 5 tajných skinů za sbírku, truhly za žetony),
+zlatá vejce jen za první porážku každého bosse a za výzvy, denní login se sérií,
 sezónní témata (Halloween/Vánoce/Velikonoce podle data, přepínatelné v Nastavení), rubber-banding po brzké smrti.
 Reklamy („Zdvojnásob vejce“, „Oživ se“) jsou jen mock s falešným dialogem. Po runu „Sdílet výsledek“ uloží PNG do `shares/`.
 

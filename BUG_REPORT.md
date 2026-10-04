@@ -379,3 +379,239 @@ pávice končí prstencem lišek přímo u ní. Banner s názvem ultimátky se u
 - B-98: nad tlačítkem ultimátky jméno zvířete v jeho barvě (snímek všech 7 tlačítek).
 - Pasti: smoke test `ultimates_regressions` (B-91, B-93, B-94, B-96, B-98). Smoke testy 19/19, kontrolní runy botem
   35/42 výher v rychlém módu (před opravami 44/56).
+
+---
+
+# Bug report: LAST CHICKEN – Straka, tajné skiny, vzácná zlatá vejce, truhly hned, 8. kolo (B-99 – B-109)
+Datum: 4. 10. 2026 · necommitnutý diff nad `4adb241` (= `origin/main` na GitHubu, 25 souborů, +556 / −107) ·
+rozsah: jen nový kód oproti GitHubu.
+
+**Jak jsem testoval:**
+- Celý diff proti `origin/main` řádek po řádku: Straka (data, sprite, zbraň `BounceWeapon`, pasivka, ultimátka
+  `heist`, zvuk), tajné skiny a Obchod, `check_collection` a `visible_chars`, zlatá vejce za bosse (`boss_gold`),
+  truhly hned (`Run.update`), výběr zvířete v boss rushi (`DailyScene`), login, truhla za žeton, týdenní odměna.
+- `scan.py` na nový kód: bez nálezu. Smoke testy **24/24**.
+- Sondy mimo projekt (headless, bez zásahu do hry), část proti verzi z GitHubu vyexportované přes `git archive HEAD`:
+  - truhla sebraná během 8s rozestupu s čekajícím level-upem,
+  - přerušení za plný run (3 seedy) stará vs. nová verze,
+  - Straka celým plným módem botem (mince, pickupy, cetky, ms/snímek), srovnání se slepicí a tučňákem,
+  - výhry bota v rychlém módu, 8 zvířat × 8 seedů,
+  - `dps_bench` (cetky vs. ostatní zbraně), `ult_lab measure` a snímky ultimátek,
+  - jedna cetka sledovaná snímek po snímku (odrazy, zásahy),
+  - zprávy a zlatá vejce po boss rushi a Nekonečné noci, rozpočet zlatých vajec z dat,
+  - snímky: denní výzva (nový hráč, plný hráč, 10 řádků žebříčku), Obchod (bez/se všemi tajnými skiny, se Strakou),
+    výběr se Strakou, 5 tajných klobouků × 8 zvířat × 2 směry, laser ze zobáku Straky.
+- **Neověřeno:** Android, ruční hraní, poslech zvuků, Straka na jiných mapách a obtížnostech, dlouhá Nekonečná noc.
+
+## Souhrn
+11 nálezů: 0 kritických, 0 vysokých, 5 středních, 6 drobných.
+Nový obsah je stabilní: nic nepadá, rozložení obrazovek sedí a Straka je v balancu uprostřed (bot 7/8 výher, ostatní
+4–8/8). Hlavní problémy jsou texty a pravidla, která změnu nesledují. Sbírka pořád slibuje 3 zlatá vejce. Truhla
+otevřená hned zruší rozestup level-upů, i když dokumentace tvrdí opak. Ultimátka Straky je výrazně nejslabší a její
+zbraň cinká stejným zvukem jako sebraná mince.
+
+## Nálezy
+
+### [B-99] Sbírka pořád slibuje „3 zlatá vejce“, odměnou je přitom tajný skin
+- Závažnost: střední
+- Kategorie: spec mismatch / UI
+- Kde: `game/scenes/collection.py:100`; `game/scenes/shop.py:184`
+- Co se děje: nahoře ve Sbírce svítí „100 % kategorie = 3 zlatá vejce“. Po dokončení kategorie ale hráč dostane jen
+  skin, zlatá vejce ne. Nadpis v Obchodě „Tajné skiny – za kompletní sbírku“ zase říká, že skiny jsou za celou
+  sbírku, ne za jednotlivé kategorie. Že celá sbírka odemkne tajné zvíře, neříká nikde nic (to může být záměr).
+- Jak se to projeví / kdy: kdykoli hráč otevře Sbírku. Nejvíc vadí ve chvíli, kdy dokončí kategorii a zlatá vejce
+  nepřijdou.
+- Důkaz:
+  ```python
+  font.draw(surf, "100 % kategorie = 3 zlatá vejce", (W // 2, 100), (255, 214, 120), 2, "midtop")
+  ```
+  `COLLECTION_REWARD_GOLD` v diffu zmizel a `check_collection` zlatá vejce nepřidává.
+- Jistota: podle kódu (text ověřen grepem, odměna sondou přes `check_collection`)
+- Proč to vadí: hra slibuje měnu, kterou nedá. Hráč, který kvůli tomu sbírku dotahuje, bude mít pocit, že je to chyba.
+- Směr opravy: přepsat texty ve Sbírce a v Obchodě podle nového pravidla („kategorie = tajný skin“).
+
+### [B-100] Truhla obchází rozestup level-upů – hned po ní naskočí level-up
+- Závažnost: střední
+- Kategorie: logika / spec mismatch
+- Kde: `game/world/run.py:1098–1103` (nová větev pro truhlu) + `Run.resume()` (`run.py:1140`)
+- Co se děje: truhla se teď otevře hned i během 8s rozestupu (`PAUSE_GAP`). Po jejím zavření ale `resume()` rovnou
+  otevře čekající level-up a `pause_cd` přitom ignoruje. Hráč tak dostane level-up → truhlu → hned další level-up.
+  FEATURES i PLAN přitom slibují „Level-up po zavření truhly dál čeká na rozestup“.
+- Jak se to projeví / kdy: kdykoli hráč sebere truhlu (elita, boss) do 8 s po zavření level-upu a mezitím nasbírá XP.
+  V pozdní hře je to běžné.
+- Důkaz: sonda, `pause_cd = 8`, 2 čekající level-upy, truhla pod hráčem:
+  `chest opened, pause_cd=7.82` → `after closing chest -> state=levelup pause_cd=7.82`.
+  Plný run botem, přerušení do 2 s po předchozím: GitHub 5 / 3 / 4, nová verze 6 / 7 / 6 (seedy 1–3).
+  Test `chest_now_gold_rare_secret_skins_magpie` to nezachytí, protože `pending_levelups` nastaví až po `resume()`.
+- Jistota: ověřeno během běhu
+- Proč to vadí: rozestup B-51 měl zabránit řetězení obrazovek a truhla ho teď obchází. Navíc se zmenší spojování
+  level-upů (B-74), protože se otevřou dřív.
+- Směr opravy: v `resume()` otevírat level-up jen při `pause_cd <= 0`, nebo test a dokumentaci sladit s tím, co hra
+  skutečně dělá.
+
+### [B-101] Velká loupež je nejslabší ultimátka – od 3. minuty nezabije ani běžnou lišku
+- Závažnost: střední
+- Kategorie: balanc
+- Kde: `game/data/ultimates.py:92` (`heist`: dmg 15, hp_pct 0,10, stun 1,6), `game/world/ultimates.py:692`
+- Co se děje: ultimátka Straky dá liškám 15 + 10 % HP. Liška ve 3. minutě má 23 HP, takže dostane 17,3 a přežije.
+  V 8. minutě (108 HP) dostane 25,8, tedy 24 %. Na snímku aktivace mají lišky v kruhu čísla 16–18 a počítadlo zabití
+  se skoro nehne.
+- Jak se to projeví / kdy: celý run se Strakou, nejvíc v pozdní hře.
+- Důkaz: `ult_lab measure` (minuta 3, 80 lišek, 3 seedy):
+
+  | ultimátka | zabití | % HP davu | přijaté poškození po 8 s |
+  |---|---|---|---|
+  | Velká loupež | **14** | **39 %** | **82 %** (nejhorší) |
+  | ostatní 7 | 33–59 | 46–83 % | 23–75 % |
+
+- Jistota: ověřeno během běhu
+- Proč to vadí: tlačítko, na které hráč 70 zabití čeká, skoro nic neudělá. Mince a přitažení zrní za to slabou
+  kontrolu davu nevyváží.
+- Záměr? Pokud má být užitková (mince a zrní), chtělo by to aspoň delší omráčení nebo procento HP, které škáluje s
+  časem. Bez toho působí jako nefunkční.
+- Směr opravy: zvednout procentní složku nebo omráčení tak, aby se ultimátka v 3./8. minutě vyrovnala ostatním.
+
+### [B-102] Lesklé cetky při každém hodu cinkají jako sebraná mince
+- Závažnost: střední
+- Kategorie: zvuk
+- Kde: `game/weapons/kinds.py:670` `run.sfx("coin", 0.35)`; sebrání mince je `game/world/run.py:922`
+  `self.sfx("coin", 0.5)`
+- Co se děje: zbraň Straky hraje každých 0,7–1,1 s stejný zvuk jako sebraná mince, jen trochu tišší. Straka je
+  přitom postavená na mincích (pasivka Zlodějka, mince z ultimátky i z evoluce).
+- Jak se to projeví / kdy: celý run se Strakou od první sekundy.
+- Důkaz: viz řádky výše, obě volání používají zvuk `"coin"`.
+- Jistota: podle kódu (zvuk jsem neposlouchal)
+- Proč to vadí: cinknutí přestane znamenat „mám minci“ a z odměny se stane kulisa. Hráč nepozná, kdy pasivka zabrala.
+- Směr opravy: dát cetkám vlastní krátký „cink/švih“ a zvuk mince nechat jen pro sebrání.
+
+### [B-103] Odemčení za dřív dokončenou sbírku proběhne potichu
+- Závažnost: střední
+- Kategorie: UI/UX
+- Kde: `game/app.py:63` – `if progression.check_collection(self.save): self.save.save()`
+- Co se děje: hráč, který měl sbírku hotovou už před updatem, dostane při startu hry Straku a skiny bez jediné zprávy.
+  Zprávy z `check_collection` („Celá sbírka! Tajemství odhaleno: Straka Klepna…“) se zahodí. Straka se jen tiše
+  přidá jako 8. tečka na konec výběru.
+- Jak se to projeví / kdy: první spuštění po updatu u hráčů, kteří mají 100 % kategorie nebo celé sbírky.
+- Důkaz: návratová hodnota (seznam zpráv) se použije jen jako podmínka pro uložení.
+- Jistota: podle kódu (neověřeno se skutečným starým savem)
+- Proč to vadí: odhalení tajného zvířete je odměna pro nejvěrnější hráče a právě ti ji neuvidí. Možná ani nezjistí,
+  že Straka existuje.
+- Směr opravy: zprávy si uložit a ukázat v menu jako dialog, podobně jako denní odměnu.
+
+### [B-104] „První porážka bosse: +6 zlatá vejce“ – špatné skloňování
+- Závažnost: drobná
+- Kategorie: UI/UX (text)
+- Kde: `game/progression.py:338–339`
+- Co se děje: pro 5 a víc je správně „zlatých vajec“ a při víc bossech „bossů“. První boss rush dá rovnou 6
+  (4 mini-bossové + Kohout 2).
+- Důkaz: sonda: `['První porážka bosse: +6 zlatá vejce', …]`
+  ```python
+  word = "zlaté vejce" if rewards["gold"] == 1 else "zlatá vejce"
+  ```
+- Jistota: ověřeno během běhu
+- Proč to vadí: na obrazovce výsledků je to vidět hned po prvním boss rushi.
+- Směr opravy: skloňovat podle čísla (1 / 2–4 / 5+) a slovo „boss“ podle počtu.
+
+### [B-105] Tajný skin: „Liščí ušanka nasazen“, sundání bez odezvy
+- Závažnost: drobná
+- Kategorie: UI/UX (text, zpětná vazba)
+- Kde: `game/scenes/shop.py:86–89`
+- Co se děje: hláška je jen v mužském rodě. Čtyři z pěti tajných skinů jsou ženského rodu (ušanka, koruna, helma,
+  svatozář), takže vznikne „Koruna dvora nasazen“. Druhé klepnutí na nasazený skin ho tiše sundá, bez hlášky a bez
+  zvuku. Hráč, který si chtěl jen ověřit, že je nasazený, ho omylem sundá.
+- Jistota: podle kódu
+- Směr opravy: rod uložit k skinu (nebo neutrální text „Nasazeno: …“) a přidat hlášku i pro sundání.
+
+### [B-106] Boss rush si nepamatuje vybrané zvíře
+- Závažnost: drobná
+- Kategorie: UI/UX
+- Kde: `game/scenes/daily.py:63–66` (`play_rush` neukládá `last_char`)
+- Co se děje: PLAN slibuje „výchozí naposledy hrané“. Výchozí je ale zvíře z hlavního výběru, ne to, se kterým hráč
+  naposledy hrál rush. Kdo hraje rush s tučňákem a jinak se slepicí, musí šipkami vybírat pokaždé znovu.
+- Jistota: podle kódu
+- Směr opravy: při startu rushe uložit volbu (třeba do vlastního klíče, ať nepřepíše výběr pro běžné módy).
+
+### [B-107] Jméno zvířete v panelu boss rushe je u Krocana skoro nečitelné
+- Závažnost: drobná
+- Kategorie: UI/UX
+- Kde: `game/scenes/daily.py:131` (jméno v barvě zvířete na panelu `(70, 40, 46)`)
+- Co se děje: červená „Krocan Rambo“ `(226, 48, 52)` na tmavě vínovém panelu má kontrast zhruba 2,9 : 1. Obrys
+  trochu pomáhá, ale text splývá (snímek `daily_full`).
+- Jistota: ověřeno na snímku
+- Směr opravy: jméno kreslit světlou barvou a barvu zvířete použít jen jako akcent, nebo dát pod jméno tmavší podklad.
+
+### [B-108] Pirátský klobouk na Strace není vidět
+- Závažnost: drobná
+- Kategorie: grafika
+- Kde: `game/gfx/sprites.py` (hlava Straky `k = (52, 50, 72)`), klobouk `pirate`
+- Co se děje: černý klobouk na černé hlavě skoro splyne. Na snímku 7 klobouků × 2 směry je to jediný, který nejde
+  rozeznat. Ostatních 5 tajných skinů na všech 8 zvířatech sedí.
+- Jistota: ověřeno na snímku
+- Směr opravy: světlý obrys klobouku, nebo lebka a lem v kontrastní barvě.
+
+### [B-109] `tools/ult_lab.py table` padá na ultimátce Straky
+- Závažnost: drobná
+- Kategorie: nástroj (vývoj)
+- Kde: `tools/ult_lab.py:370` – větev `else` počítá s Dobou ledovou (`s["dur"]`, `s["tick"]`)
+- Co se děje: po přidání `magpie` do `ORDER` skončí `table` výjimkou `KeyError: 'dur'`. Ostatní příkazy
+  (`measure`, `shots`) fungují.
+- Jistota: ověřeno během běhu
+- Směr opravy: přidat větev pro `heist` (podle výpočtu výše 75 % / 24 % HP lišky ve 3. / 8. min).
+
+## Ověřeno a v pořádku (bez nálezu)
+- Zlatá vejce: každý boss jen jednou, Kohout zvlášť pro každou mapu. Boss rush poprvé dá 6, Nekonečná noc v Lese pak
+  jen `zombie_rooster:forest`. Starý save bez `boss_gold` se načte (`_merge`).
+- Rozpočet zlatých vajec z dat: výzvy 38 + bossové 14 = 52 a nikde se neobnovují. Skiny za ně stojí 26, nic se tedy
+  nezablokuje (viz otázka v tématech).
+- Cetky: 3 odrazy = 4 zásahy, každý odraz míří na nejbližší nezasaženou lišku a sprite se natáčí po směru letu.
+  DPS uprostřed pole: L8 144 na cíl / 1 250 do davu (ostatní zbraně 40–310 / 175–1 642). Dokumentace uvádí 112 / 976,
+  to je jen nepřesný údaj, ne chyba hry.
+- Straka botem: rychlý mód 7/8 výher (ostatní 4–8/8), mince zhruba 2× (225 proti 99–150). Plný mód: 1 255 mincí
+  proti 708 u slepice, vejce +26 %. Výkon 0,27 ms/snímek, pickupů nejvýš 384 (slepice 388), živých cetek nejvýš 18.
+- Determinismus: náhoda Zlodějky se čerpá jen u Straky a denní výzva bere zvířata z `CHAR_ORDER[:6]`, takže se denní
+  výzva ani žebříček nezmění.
+- Rozložení: žebříček s 10 řádky se do zkráceného panelu vejde, Obchod (7 řádků + 5 dlaždic + truhla) se vejde do
+  960 px, výběr s 8 tečkami sedí, laser vychází ze zobáku Straky na obě strany.
+- Truhla otevřená hned nepřeskočí odměnu: overlay má zámek a „Pokračovat“ se ukáže až po ~1,2 s.
+
+## Co jsem nestihl / neověřil
+- Poslech zvuků (`ult_magpie`, cetky), Android, ruční hraní.
+- Straka na ostatních mapách, Hard/Nightmare a v dlouhé Nekonečné noci. Plný mód jen 1 seed.
+- Migraci na skutečném starém savu s hotovou sbírkou. B-103 je jen podle kódu, skutečný save jsem neotevíral.
+- Mimo hru: nesledovaná složka `.evolve/` obsahuje lokální cestu k záloze (`C:\Users\…`). Kdyby se omylem commitla
+  (`git add .`), dostala by se na GitHub. Není v `.gitignore`.
+
+## Témata, která se opakují
+- **Texty a dokumentace nesledují změnu pravidel** (B-99, B-100, B-104): pravidla odměn se změnila v kódu, ale
+  Sbírka, Obchod i FEATURES mluví postaru nebo slibují něco, co kód nedělá.
+- **Test ověřuje zjednodušený scénář** (B-100): nový test pokryje šťastnou cestu, ne souběh s čekajícím level-upem,
+  kde se chyba projeví.
+- **Jeden signál pro dva významy** (B-102, B-108): zvuk mince pro hod zbraní, černá na černé. Nové zvíře dědí
+  prostředky, které už něco znamenají.
+- **Migrace bez zpětné vazby** (B-103): zpětné přidělení odměn funguje, ale hráč se o něm nedozví.
+- Otázka (záměr?): zlatá vejce jsou teď „vzácná“, ale po koupi 4 skinů za 26 nemají využití a dá se jich získat 52.
+  Vzácná měna bez využití hráče nemotivuje.
+
+## Opraveno (8. kolo, 4. 10. 2026 – ověřeno stejnými sondami)
+- B-99: Sbírka „100 % kategorie = tajný skin · vše = ???“ (po odhalení „Straka“), Obchod „Tajné skiny – za
+  kompletní kategorie sbírky“.
+- B-100 (podle upřesnění zadavatele: truhla se do rozestupu vůbec nepočítá): `Run.resume()` obnoví rozestup jen po
+  level-upu; po truhle se rozestup nezmění a čekající level-up počká, až doběhne. Sonda: po zavření truhly
+  `state=playing pause_cd=7.82` (dřív hned `levelup`). Řetěz „truhla → hned level-up“ zmizel (min. odstup přerušení
+  0,18–0,67 s místo 0,00 s); truhla se pořád otevře okamžitě.
+- B-101: Velká loupež 30 + 40 % HP, omráčení 1,8 s (dřív 15 + 10 %, 1,6 s). `ult_lab measure`: 42 zabití, 57 % HP
+  davu, přijaté poškození po 8 s 45 % (dřív 14 / 39 % / 82 %) – uprostřed ostatních. Bot se Strakou dál 7/8 výher.
+- B-102: nový zvuk `trinket` (švih + skleněné tink, 0,12 s); cetky i Strakatý poklad ho používají, `coin` zůstal
+  jen pro sebrání mince.
+- B-103: `App.startup_msgs` → menu ukáže dialog „Tajemství odhaleno!“ (po případné denní odměně, jen jednou),
+  skiny sloučené do jedné věty (snímek s 5 skiny + Strakou se vejde).
+- B-104: „První porážka bossů: +6 zlatých vajec“ (1 / 2–4 / 5+).
+- B-105: „Nasazeno: …“ / „Sundáno: …“ + klik i při sundání.
+- B-106: boss rush si pamatuje zvíře v `save["weekly"]["char"]` (výchozí, jinak naposledy hrané).
+- B-107: jméno zvířete v panelu rushe světlým odstínem jeho barvy (snímek: Krocan čitelný).
+- B-108: pirátský klobouk se zlatým lemem – na Strace viditelný (snímek 3 klobouky × 8 zvířat).
+- B-109: `ult_lab table` má větev pro Velkou loupež (100 % / 68 % HP lišky ve 3. / 8. min).
+- Mimo hru: `.evolve/` v `.gitignore`.
+- Pasti: smoke test `round8_regressions`, upravené `chest_now_gold_rare_secret_skins_magpie` (souběh truhly s
+  čekajícím level-upem) a `daily_fixed_rush_character_choice` (zapamatování zvířete). Smoke testy 25/25.
+- Otázka zlatých vajec bez využití (52 získatelných / 26 k utracení) zůstává otevřená – rozhodnutí o designu.

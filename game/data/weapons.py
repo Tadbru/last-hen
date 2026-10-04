@@ -234,6 +234,17 @@ _reg(
                ({"dmg": 9, "size": 0.4}, "Větší ryba, +9 poškození."),
                ({"count": 1, "cd": -0.4}, "+1 ryba, rychlejší házení.")],
        evo_passive="clock", evo_to="frozen_tsunami"),
+    _w(id="trinkets", name="Lesklé cetky", kind="bounce", icon="trinkets", sound="trinket", owner="magpie",
+       color=(255, 226, 120), desc="Hází blýskavé cetky, které se odrážejí z lišky na lišku.",
+       base=dict(dmg=20, cd=1.1, count=1, bounces=3, speed=430, life=1.4, range=380, hop=220),
+       levels=[({"bounces": 1}, "+1 odraz."),
+               ({"dmg": 8}, "+8 poškození."),
+               ({"count": 1}, "+1 cetka."),
+               ({"cd": -0.25}, "Rychlejší házení."),
+               ({"bounces": 2}, "+2 odrazy."),
+               ({"dmg": 13}, "+13 poškození."),
+               ({"count": 1, "bounces": 2}, "+1 cetka, +2 odrazy.")],
+       evo_passive="magnet", evo_to="treasure"),
 )
 
 # --- evoluce ---------------------------------------------------------------------------
@@ -302,9 +313,14 @@ _reg(
        evolved_from="fish", sound="freeze", color=(200, 240, 255), owner="penguin",
        desc="Hejno zmražených ryb do všech stran. Zmrazí cokoli.",
        base=dict(dmg=55, cd=1.1, count=8, range=320, speed=420, slow=0.6, freeze=1.2, size=1.6, radial=1)),
+    _w(id="treasure", name="Strakatý poklad", kind="bounce", icon="trinkets", evolution=True, evolved_from="trinkets",
+       sound="trinket", color=(255, 214, 70), owner="magpie",
+       desc="Cetky skáčou do všech lišek kolem a občas z nich vypadne mince.",
+       base=dict(dmg=52, cd=0.7, count=3, bounces=9, speed=500, life=1.8, range=420, hop=260, coin=0.06)),
 )
 
 BASE_WEAPONS = ["egg", "crow_wave", "chick_army", "shuriken", "laser", "nest", "lightning", "stink", "wolf_howl", "sky_cake"]
 STARTER_WEAPONS = ["water_pistol", "beak_whip", "feather_shotgun", "sound_waves", "fan_tail", "fish"]
-EVOLUTIONS = [w.evo_to for w in WEAPONS.values() if w.evo_to]
+SECRET_WEAPONS = ["trinkets"]   # zbraň tajného zvířete – mimo sbírku (jinak by 100 % nešlo splnit bez Straky)
+EVOLUTIONS = [w.evo_to for w in WEAPONS.values() if w.evo_to and w.id not in SECRET_WEAPONS]
 ALL_BASE = BASE_WEAPONS + STARTER_WEAPONS

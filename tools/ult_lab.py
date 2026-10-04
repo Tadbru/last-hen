@@ -26,7 +26,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame  # noqa: E402
 
-ORDER = ["hen", "duck", "goose", "turkey", "rooster", "peacock", "penguin"]
+ORDER = ["hen", "duck", "goose", "turkey", "rooster", "peacock", "penguin", "magpie"]
 
 
 def _init(render: bool = False) -> None:
@@ -366,6 +366,11 @@ def cmd_table(a) -> None:
             d = [0.0, 0.0]
             note = (f"okouzlí max. {s['max_n']} lišek, úder {s['hit']:.0f}× poškození lišky / "
                     f"{s['hit_pct'] * 100:.0f} % HP cíle za {s['hit_cd']} s")
+        elif u.id == "heist":
+            reach, dur = f"{s['radius']} (zrní {s['loot']})", "0,5 s"
+            d = [dmg(m, s["dmg"], s["hp_pct"]) for m in (3, 8)]
+            note = (f"omráčí {s['stun']} s, {s['coin'] * 100:.0f} % lišek upustí minci (max. {s['coins_max']}), "
+                    f"stáhne zrní do {s['loot']} px")
         else:
             n = int(s["dur"] / s["tick"])
             reach, dur = f"{s['radius']}", f"{s['dur']:.1f} s"

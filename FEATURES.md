@@ -1,5 +1,27 @@
 # Features
 
+## Straka, tajné skiny, vzácná zlatá vejce, truhly hned (4. 10. 2026)
+- **Truhly hned:** sebraná truhla se otevře okamžitě a do rozestupu 8 s mezi level-upy se vůbec nepočítá: rozestup
+  neobnoví ani nezkrátí, čekající level-up po zavření truhly počká, až rozestup doběhne (`Run.resume`, B-100).
+- **Zlatá vejce vzácnější:** jen za první porážku každého bosse (mini-boss 1, finální Kohout 2 – zvlášť za každou
+  mapu, protože každá má jeho jinou variantu) a za výzvy. Zrušena ze sbírky (→ tajné skiny), ze 7. dne přihlášení
+  (→ žeton), z týdenního boss rushe (→ 3 žetony) a z truhly za žeton (→ vejce). Nový klíč save `boss_gold`
+  (výchozí prázdný – starý save funguje, počítá se od teď).
+- **Tajné skiny:** v Obchodě řada pěti otazníků; každá kompletní kategorie sbírky odhalí jeden: Nepřátelé → Liščí
+  ušanka, Bossové → Koruna dvora, Zbraně → Vojenská helma, Evoluce → Svatozář, Pasivky → Čarodějný klobouk.
+  Klepnutí na otazník řekne, kolik v kategorii chybí. Dřív dokončené kategorie skin dostanou zpětně (při startu hry).
+- **Straka Klepna (tajné 8. zvíře):** odemkne celá sbírka; do té doby ji výběr vůbec neukazuje. Lesklé cetky
+  (cetka se po zásahu odrazí k další lišce; L8 112 DPS na cíl / 976 do davu po posílení +25 %, evoluce Strakatý
+  poklad s Magnetem na zrní), pasivka Zlodějka (6 % zabití upustí minci, +50 % dosah sběru), slabina 90 % životů,
+  ultimátka **Velká loupež** (r 260: omráčí 1,8 s, 30 + 40 % HP (B-101, dřív 15 + 10 %), 25 % lišek upustí minci, stáhne zrní do 650 px;
+  70 zabití / 9 s, nejkratší rozestup 6 s). Bot v rychlém módu 7/8 výher (ostatní zvířata 4–8/8).
+- Testy: `chest_now_gold_rare_secret_skins_magpie` (+ Straka ve všech testech přes `CHAR_ORDER`).
+- **Opravy 8. kola (B-99 – B-109):** Sbírka a Obchod popisují nové odměny (kategorie = tajný skin, celá sbírka =
+  „???“, po odhalení „Straka“); cetky mají vlastní zvuk `trinket` (ne zvuk mince); odměny sbírky přidělené zpětně
+  při startu hry ukáže menu dialogem „Tajemství odhaleno!“; skloňování „+6 zlatých vajec“ / „bossů“; tajné skiny
+  hlásí „Nasazeno: …“ / „Sundáno: …“; boss rush si pamatuje zvíře (`save["weekly"]["char"]`) a jméno kreslí světlým
+  odstínem; pirátský klobouk má zlatý lem; `ult_lab table` zná Velkou loupež. Test `round8_regressions`.
+
 ## Ovládání a drobnosti (4. 10. 2026, po zpětné vazbě)
 - **Pevný joystick:** vznikne, kam hráč ťukne, kdekoli na obrazovce (dřív jen ve spodních 2/3). Střed zůstává
   po celou dobu dotyku na místě (dřív se za prstem posouval), páčka se zastaví na okraji a zvíře jde plnou rychlostí
@@ -14,8 +36,9 @@
 - **Názvy zbraní:** Vaječný granát (dřív Vejce granát), Husí štípanec (dřív Zobák-šleh, sjednocené i texty úrovní),
   Páví vějíř (dřív Ocas-vějíř). Id zbraní se nezměnila, uložené hry a sbírka beze změny.
 - Ověřeno: smoke testy 20/20, snímek laseru u všech 7 zvířat na obě strany.
-- **Denní výzva s výběrem zvířete:** mapa a modifikátor zůstávají pro všechny stejné, zvíře se vybírá šipkami ze
-  všech odemčených; dnešní zvíře výzvy je výchozí (zamčené jde dál zapůjčit). Test `daily_character_choice`.
+- **Výběr zvířete v týdenním boss rushi** (původně omylem v denní výzvě, opraveno týž den): šipky nad tlačítkem
+  Hrát v panelu boss rushe, všechna odemčená zvířata, výchozí naposledy hrané. Denní výzva má zase pevné zvíře dne.
+  Žebříček zhuštěn (řádky po 30 px), aby se panel rushe s výběrem vešel. Test `daily_fixed_rush_character_choice`.
 - **Tučňák bez klouzání:** pasivka Klouzání po břiše (setrvačnost, +60 % při jízdě rovně, zranění při nárazu)
   nahrazena pasivkou **Ledová krev** – zmražené lišky od něj dostanou o 30 % víc (souhra s Mraženou rybou a Dobou
   ledovou); slabina „O 5 % pomalejší“. Test `goose_whip_and_penguin_no_slide`.

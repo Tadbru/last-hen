@@ -8,7 +8,7 @@ import pygame
 from .. import assets, progression
 from ..config import C_GOLD, C_OUTLINE, C_TEXT, H, W
 from ..data.biomes import BIOME_ORDER, BIOMES
-from ..data.characters import CHAR_ORDER, CHARACTERS
+from ..data.characters import CHARACTERS
 from ..data.meta import DIFF_ORDER, DIFFICULTIES
 from ..data.ultimates import ult_for
 from ..data.weapons import WEAPONS
@@ -27,7 +27,8 @@ class SelectScene(Scene):
     def __init__(self, app) -> None:
         super().__init__(app)
         s = self.save
-        self.ci = CHAR_ORDER.index(s["last_char"]) if s["last_char"] in CHAR_ORDER else 0
+        self.order = progression.visible_chars(s)          # Straka je skrytá, dokud ji hráč nezíská
+        self.ci = self.order.index(s["last_char"]) if s["last_char"] in self.order else 0
         self.biome = s["last_map"] if s["last_map"] in s["unlocked_maps"] else "farm"
         modes = ("quick", "full", "endless") if progression.endless_unlocked(s) else ("quick", "full")
         self.mode = s["last_mode"] if s["last_mode"] in modes else "quick"
@@ -62,7 +63,7 @@ class SelectScene(Scene):
     # --- stav ------------------------------------------------------------------------------------
     @property
     def char(self):
-        return CHARACTERS[CHAR_ORDER[self.ci]]
+        return CHARACTERS[self.order[self.ci]]
 
     def unlocked(self, cid: str) -> bool:
         return cid in self.save["unlocked_chars"]
@@ -91,11 +92,11 @@ class SelectScene(Scene):
             bt.sub = "" if ok else "zamčeno"
 
     def prev(self) -> None:
-        self.ci = (self.ci - 1) % len(CHAR_ORDER)
+        self.ci = (self.ci - 1) % len(self.order)
         self._sync()
 
     def next(self) -> None:
-        self.ci = (self.ci + 1) % len(CHAR_ORDER)
+        self.ci = (self.ci + 1) % len(self.order)
         self._sync()
 
     def set_mode(self, m: str) -> None:
@@ -216,8 +217,8 @@ class SelectScene(Scene):
             font.draw(surf, font.fit("Slabina: " + c.weakness, tw, 2), (r.x + 12, y + 2), (255, 160, 150), 2,
                       "topleft", outline=C_OUTLINE)
         # tečky postav – nad tlačítkem Koupit (B-42)
-        for i, cid in enumerate(CHAR_ORDER):
-            x = W // 2 + (i - 3) * 26
+        for i, cid in enumerate(self.order):
+            x = int(W // 2 + (i - (len(self.order) - 1) / 2) * 26)
             kind = "sel" if i == self.ci else "on" if self.unlocked(cid) else "off"
             dot = _page_dot(kind)
             surf.blit(dot, dot.get_rect(center=(x, 424)))
