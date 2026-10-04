@@ -63,7 +63,7 @@ Tajemství: zkus 10× klepnout na logo v menu.
 Nekonečná noc (odemkne výhra Plného módu: prvních 10 minut jako Plný mód, pak slunce nevyjde – další noci se silnějšími
 bossy (další přijde až po porážce předchozího), lišky dál sílí, hraje se na rekord času pro každou mapu a obtížnost;
 „noční síla“ +4 % poškození za level-up s hotovým buildem),
-Denní výzva (seed z data, jeden pokus, modifikátor, lokální žebříček), Týdenní boss rush (všech 5 bossů za sebou).
+Denní výzva (seed z data, jeden pokus, mapa a modifikátor pro všechny stejné, zvíře podle volby, lokální žebříček), Týdenní boss rush (všech 5 bossů za sebou).
 Obtížnosti Normal / Hard / Nightmare.
 
 **Zvířata (7):**
@@ -76,7 +76,7 @@ Obtížnosti Normal / Hard / Nightmare.
 | Krocan Rambo | Brokovnice z peří | kritické zásahy ×3 | střílí pomaleji | Operace Díkůvzdání – salvy brků do všech stran | 3 000 vajec |
 | Kohout Elvis | Zvukové vlny | ultimátka se nabíjí 2× rychleji | křehký | Královské KIKIRIKÍ – původní kokrhání | poraz Zombie Kohouta |
 | Páv Diva | Páví vějíř | hypnóza nepřátel | o 10 % víc XP na úroveň | Božská krása – okouzlené lišky bojují za ni | výzva „Tisíc lišek“ |
-| Tajný tučňák | Mražená ryba (bumerang, mrazí) | klouzání po břiše – zrychluje a při plné rychlosti zraňuje | setrvačnost | Doba ledová – mrazivý vír kolem tučňáka | easter egg |
+| Tajný tučňák | Mražená ryba (bumerang, mrazí) | Ledová krev – zmražené lišky od něj dostanou o 30 % víc | o 5 % pomalejší | Doba ledová – mrazivý vír kolem tučňáka | easter egg |
 
 Podrobnosti ultimátek (čísla, nabíjení, měření) jsou v `FEATURES.md`.
 

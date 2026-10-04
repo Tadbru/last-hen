@@ -6,7 +6,7 @@ import pygame
 from .. import assets, progression
 from ..config import C_GOLD, C_OUTLINE, C_TEXT, W
 from ..data.biomes import BIOMES
-from ..data.characters import CHARACTERS
+from ..data.characters import CHAR_ORDER, CHARACTERS
 from ..data.meta import DAILY_MOD_BY_ID
 from ..ui.widgets import Button, draw_panel, draw_title_bar, MARGIN
 from ..util import fmt_num
@@ -28,13 +28,30 @@ class DailyScene(Scene):
             self.b_daily.enabled = False
             self.b_daily.text = "Hotovo"
             self.b_daily.sub = "zítra znovu"
+        # výběr zvířete: všechna odemčená + dnešní zvíře výzvy (zapůjčené); mapa a modifikátor jsou pro všechny stejné
+        un = self.save["unlocked_chars"]
+        self.chars = [c for c in CHAR_ORDER if c in un or c == self.spec["character"]]
+        self.ci = self.chars.index(self.spec["character"])
+        self.b_prev = self.add(Button((MARGIN + 6, 152, 44, 60), "", lambda: self.pick(-1), icon="back", style="dark",
+                                      key=pygame.K_LEFT))
+        self.b_next = self.add(Button((W - MARGIN - 50, 152, 44, 60), "", lambda: self.pick(1), icon="forward",
+                                      style="dark", key=pygame.K_RIGHT))
+        for b in (self.b_prev, self.b_next):
+            b.enabled = len(self.chars) > 1 and not played
         self.b_rush = self.add(Button((W - 210, 818, 190, 70), "Hrát", self.play_rush, icon="play", style="danger",
                                       sub="všichni bossové"))
+
+    @property
+    def char_id(self) -> str:
+        return self.chars[self.ci]
+
+    def pick(self, d: int) -> None:
+        self.ci = (self.ci + d) % len(self.chars)
 
     def play_daily(self) -> None:
         from .game import GameScene, build_config
         sp = self.spec
-        cfg = build_config(self.app, sp["character"], sp["biome"], "daily", "normal", (sp["modifier"],), sp["seed"])
+        cfg = build_config(self.app, self.char_id, sp["biome"], "daily", "normal", (sp["modifier"],), sp["seed"])
         cfg.bonus_levels = 0
         self.save["daily"]["last_played"] = sp["date"]
         self.save.save()
@@ -57,12 +74,17 @@ class DailyScene(Scene):
         r = pygame.Rect(16, 110, W - 32, 236)
         draw_panel(surf, r, (50, 58, 80))
         font.draw(surf, sp["date"], (r.x + 16, r.y + 14), C_GOLD, 2, "topleft")
-        font.draw(surf, "Pro všechny stejná", (r.right - 16, r.y + 14), (190, 200, 220), 2, "topright")
-        ch = CHARACTERS[sp["character"]]
+        font.draw(surf, "Mapa a modifikátor pro všechny", (r.right - 16, r.y + 14), (190, 200, 220), 2, "topright")
+        ch = CHARACTERS[self.char_id]
         img = assets.sprites.players[ch.id].frames[0][int(self.t * 3) % 2]
-        surf.blit(img, (r.x + 16, r.y + 44))
-        font.draw(surf, ch.name, (r.x + 84, r.y + 50), C_TEXT, 2, "topleft")
-        font.draw(surf, f"Mapa: {BIOMES[sp['biome']].name}", (r.x + 84, r.y + 76), (210, 220, 240), 2, "topleft")
+        surf.blit(img, (r.x + 64, r.y + 44))
+        name_w = self.b_next.rect.x - (r.x + 132) - 8
+        font.draw(surf, font.fit(ch.name, name_w, 2), (r.x + 132, r.y + 46), ch.color, 2, "topleft", outline=C_OUTLINE)
+        if ch.id == sp["character"]:
+            tag = "dnešní zvíře" + ("" if ch.id in self.save["unlocked_chars"] else " · zapůjčeno")
+            font.draw(surf, font.fit(tag, name_w, 2), (r.x + 132, r.y + 70), (170, 220, 170), 2, "topleft")
+        font.draw(surf, font.fit(f"Mapa: {BIOMES[sp['biome']].name}", name_w, 2), (r.x + 132, r.y + 94),
+                  (210, 220, 240), 2, "topleft")
         mod = DAILY_MOD_BY_ID[sp["modifier"]]
         font.draw(surf, f"Modifikátor: {mod['name']}", (r.x + 16, r.y + 116), (255, 170, 120), 2, "topleft")
         yy = r.y + 142
@@ -71,8 +93,6 @@ class DailyScene(Scene):
             yy += 22
         font.draw(surf, "Odměna: 1 žeton", (r.x + 16, r.bottom - 28), (255, 214, 120), 2, "topleft",
                   outline=C_OUTLINE)
-        if not ch.id in self.save["unlocked_chars"]:
-            font.draw(surf, "zapůjčeno na dnešek", (r.right - 16, r.y + 50), (170, 220, 170), 2, "topright")
         # žebříček
         board = progression.daily_leaderboard(self.save, sp)
         lr = pygame.Rect(16, 362, W - 32, 380)

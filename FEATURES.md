@@ -14,6 +14,13 @@
 - **Názvy zbraní:** Vaječný granát (dřív Vejce granát), Husí štípanec (dřív Zobák-šleh, sjednocené i texty úrovní),
   Páví vějíř (dřív Ocas-vějíř). Id zbraní se nezměnila, uložené hry a sbírka beze změny.
 - Ověřeno: smoke testy 20/20, snímek laseru u všech 7 zvířat na obě strany.
+- **Denní výzva s výběrem zvířete:** mapa a modifikátor zůstávají pro všechny stejné, zvíře se vybírá šipkami ze
+  všech odemčených; dnešní zvíře výzvy je výchozí (zamčené jde dál zapůjčit). Test `daily_character_choice`.
+- **Tučňák bez klouzání:** pasivka Klouzání po břiše (setrvačnost, +60 % při jízdě rovně, zranění při nárazu)
+  nahrazena pasivkou **Ledová krev** – zmražené lišky od něj dostanou o 30 % víc (souhra s Mraženou rybou a Dobou
+  ledovou); slabina „O 5 % pomalejší“. Test `goose_whip_and_penguin_no_slide`.
+- **Husí štípanec trefuje:** útok se spustí jen na lišku opravdu na dosah (dosah + její poloměr, tedy maximální
+  možný) a míří na ni – žádné štípnutí do vzduchu.
 
 ## v1.2.0 – Ultimátky zvířat (4. 10. 2026)
 

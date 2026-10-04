@@ -31,7 +31,7 @@ game/
                            vše datově řízené (dicty/dataclassy) – obsah se přidává jen sem
   world/ run.py            Run = celá simulace runu (bez renderu → headless bot/sim)
          entities.py       lehké entity se __slots__ (Enemy, Proj, EProj, Area, Beam, Ring, Telegraph, Pickup…)
-         player.py         pohyb, statistiky, squash & stretch, klouzání tučňáka
+         player.py         pohyb, statistiky, squash & stretch, poloha zobáku
          enemies.py        jediná rychlá smyčka AI nepřátel (pohyb, separace, překážky, kontakt)
          bosses.py         stavové automaty 5 bossů + biomové varianty finálního Zombie Kohouta
          allies.py         kuřata, spřátelené lišky, hnízda
@@ -86,7 +86,7 @@ tests/smoke_test.py        headless smoke testy všech systémů
 - **Rarita karet**: běžná = +1 úroveň, vzácná = +2, epická = +3 (nová zbraň/pasivka začne na vyšší úrovni). Čtyřlístek zvyšuje šanci na vzácné/epické.
 - **Startovní zbraně zvířat** jsou exkluzivní pro dané zvíře (každé zvíře hraje jinak); 10 základních zbraní je v poolu pro všechny.
 - **Evoluce**: všech 10 základních zbraní + 6 startovních má evoluci (16 celkem). Otevře se bednou z elity/bosse, když je zbraň na úr. 8 a hráč vlastní pasivku.
-- **Tajný tučňák**: zbraň „Mražená ryba“ (bumerang, který zmrazuje), pasivka „Klouzání po břiše“ (při pohybu jedním směrem zrychluje až o 60 % a při plné rychlosti zraňuje, čím projede), slabina setrvačnost. Odemčení: 10× klepnout na logo v menu.
+- **Tajný tučňák**: zbraň „Mražená ryba“ (bumerang, který zmrazuje), pasivka „Ledová krev“ (zmražené lišky od něj dostanou o 30 % víc), slabina o 5 % pomalejší. Odemčení: 10× klepnout na logo v menu. (Do 4. 10. 2026 měl pasivku „Klouzání po břiše“ se setrvačností – na přání zadavatele zrušena; kód klouzání zůstal vázaný na `special == "slide"` a nic ho nepoužívá.)
 - **Páv Diva**: odemčení splněním výzvy „Tisíc lišek“. „Drahé upgrady“ = o 10 % víc XP na úroveň (původně 25 %, změněno v B-52). Hypnóza = zmatený nepřítel bloudí a dostává +25 % damage.
 - **Kohout Elvis**: odemčení porážkou finálního bosse (libovolný mód).
 - **Obtížnosti**: Hard se odemkne výhrou na Normal, Nightmare výhrou na Hard. Násobí HP/damage/spawn i odměny.
@@ -94,7 +94,7 @@ tests/smoke_test.py        headless smoke testy všech systémů
 - **Rubber-banding**: smrt před 1:30 → další run začíná s bonusem XP (1 úroveň zdarma).
 - **Mince** v runu (skip, bedny, Zlatá bomba) se na konci převedou na vejce 1:1.
 - **Zlatá vejce**: bossové, výzvy, denní série, 100% sbírky. **Žetony**: denní výzva + denní login → truhly v Obchodě.
-- **Denní výzva**: seed = datum, jedna šance denně, pevná kombinace zvíře/mapa/modifikátor; lokální žebříček top 10 = vlastní výsledky + deterministicky generovaní „sousedé“ z vesnice (offline hra nemá server).
+- **Denní výzva**: seed = datum, jedna šance denně, mapa a modifikátor pro všechny stejné, zvíře si hráč vybere ze všech odemčených (dnešní zvíře výzvy je výchozí a dá se zapůjčit i zamčené – změna 4. 10. 2026); lokální žebříček top 10 = vlastní výsledky + deterministicky generovaní „sousedé“ z vesnice (offline hra nemá server).
 - **Týdenní boss rush**: všichni bossové za sebou, start s 10 level-upy zdarma (bossové sypou XP), odměna jednou za ISO týden.
 - **Sezónní témata**: automaticky podle data (říjen = Halloween, prosinec = Vánoce, březen–duben = Velikonoce), přepínatelné v Nastavení.
 - **Reklamy** jsou jen mock (falešný dialog s odpočtem), žádné SDK.
@@ -109,6 +109,8 @@ tests/smoke_test.py        headless smoke testy všech systémů
     jen první prst), na PC pravým tlačítkem myši. Joystick dál ovládá jen jeden prst.
   - Zobák-laser (i Oči sokola) střílí ze špičky zobáku podle spritu a směru zvířete (`PLAYER_BEAK`, `Player.beak()`),
     u klouzajícího tučňáka z ležícího spritu; míří ze zobáku na cíl.
+  - Husí štípanec (husa) zaútočí, jen když je nějaká liška opravdu na dosah (dosah + poloměr lišky = maximální dosah)
+    a míří na nejbližší takovou – každý útok zasáhne; dřív stačilo „dosah + 30 px“ a husa štípala do vzduchu.
   - Přejmenování: Vejce granát → Vaječný granát, Zobák-šleh → Husí štípanec, Ocas-vějíř → Páví vějíř (id beze změny,
     uložené hry nedotčené).
 - **Ultimátky (v1.2.0)** – rozhodnuto samostatně během autonomní práce:

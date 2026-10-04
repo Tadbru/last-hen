@@ -945,6 +945,83 @@ def fixed_joystick_anywhere():
 
 
 @test
+def daily_character_choice():
+    """Denní výzva: zvíře jde vybrat ze všech odemčených (+ dnešní zvíře výzvy), mapa a modifikátor zůstávají."""
+    a = app()
+    from game.config import DT
+    from game.scenes.daily import DailyScene
+    from game.scenes.game import GameScene
+    s = a.save
+    old = (list(s["unlocked_chars"]), s["daily"].get("last_played", ""))
+    try:
+        s["unlocked_chars"] = ["hen", "turkey", "penguin"]
+        s["daily"]["last_played"] = ""
+        sc = DailyScene(a)
+        a.set_scene(sc)
+        spec = sc.spec
+        assert sc.char_id == spec["character"], "výchozí je dnešní zvíře"
+        assert set(sc.chars) == {"hen", "turkey", "penguin", spec["character"]}
+        sc.pick(1)
+        chosen = sc.char_id
+        assert chosen != spec["character"] or len(sc.chars) == 1
+        sc.play_daily()
+        for _ in range(40):
+            a.step(DT)
+        gs = a.scene
+        assert isinstance(gs, GameScene), type(gs)
+        assert gs.cfg.character == chosen and gs.cfg.mode == "daily", (gs.cfg.character, chosen)
+        assert gs.cfg.biome == spec["biome"] and gs.cfg.modifiers == (spec["modifier"],) and gs.cfg.seed == spec["seed"]
+    finally:
+        s["unlocked_chars"], s["daily"]["last_played"] = old
+
+
+@test
+def goose_whip_and_penguin_no_slide():
+    """Husí štípanec štípe jen to, na co dosáhne (každý útok zasáhne), a až do maximálního dosahu.
+    Tučňák neklouže (Ledová krev: zmražené lišky berou víc)."""
+    app()
+    from game.config import DT
+    from game.world.run import Run, RunConfig
+    for lv in (1, 8):
+        run = Run(RunConfig(character="goose", mode="full", seed=1, headless=True))
+        run.director.update = lambda dt: None
+        w = run.weapons[0]
+        w.set_level(lv)
+        p = run.player
+        reach = w.area(w.s["area"])
+        e = run.spawn_enemy("fast_fox", p.x + reach + 5, p.y)          # poloměr 11 → těsně na dosah
+        e.speed = 0
+        e.hp = e.max_hp = 1e9
+        run.update(DT)
+        hp0 = e.hp
+        assert w.fire(), "liška na maximálním dosahu se musí štípnout"
+        assert e.hp < hp0, "útok, který proběhl, musí zasáhnout"
+        e.x = p.x + reach + e.r + 6                                    # kousek za dosahem
+        run.update(DT)
+        n_beams = len(run.beams)
+        assert not w.fire(), "husa nesmí štípat do vzduchu"
+        assert len(run.beams) == n_beams
+    # tučňák: rovná jízda nezrychluje, žádné klouzání ani setrvačnost
+    run = Run(RunConfig(character="penguin", mode="full", seed=1, headless=True))
+    run.director.update = lambda dt: None
+    p = run.player
+    for _ in range(240):
+        run.update(DT, 1.0, 0.0)
+    assert p.slide == 0.0 and abs(p.vx - p.stats.speed) < 1.0, (p.slide, p.vx, p.stats.speed)
+    for _ in range(6):                     # běžné zvíře zabrzdí za ~4 snímky (tučňák dřív klouzal ~0,3 s)
+        run.update(DT, 0.0, 0.0)
+    assert abs(p.vx) < 1.0, "bez setrvačnosti se zastaví hned"
+    e = run.spawn_enemy("wolf", p.x + 300, p.y)
+    e.hp = e.max_hp = 1e6
+    run.damage_enemy(e, 100, None, crit=False)
+    plain = 1e6 - e.hp
+    e.freeze_t = 2.0
+    hp = e.hp
+    run.damage_enemy(e, 100, None, crit=False)
+    assert abs((hp - e.hp) - plain * 1.3) < 1e-6, (plain, hp - e.hp)
+
+
+@test
 def long_headless_simulation():
     """Několik tisíc framů plného módu bez výjimky."""
     from game.bot import Bot

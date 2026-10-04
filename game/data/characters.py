@@ -62,9 +62,9 @@ CHARACTERS: dict[str, CharDef] = {c.id: c for c in [
             xp_req=1.1, special="hypnosis", color=(82, 142, 232)),
     CharDef("penguin", "Tajný tučňák", False, "fish",
             "Nikdo neví, jak se dostal na farmu. On taky ne.",
-            "Klouzání po břiše", "Rovně klouže až o 60 % rychleji a zraňuje, co srazí.",
-            "Pomalu zatáčí.", "secret", "Tajemství… zkus klepat na logo", 0,
-            hp=1.0, speed=0.95, special="slide", color=(80, 140, 230)),
+            "Ledová krev", "Zmražené lišky od něj dostanou o 30 % víc.",
+            "O 5 % pomalejší.", "secret", "Tajemství… zkus klepat na logo", 0,
+            hp=1.0, speed=0.95, special="frost", color=(80, 140, 230)),   # dřív „slide“ – klouzání zrušeno
 ]}
 
 CHAR_ORDER = ["hen", "duck", "goose", "turkey", "rooster", "peacock", "penguin"]

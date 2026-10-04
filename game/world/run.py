@@ -49,6 +49,7 @@ PAUSE_GAP = 8.0             # min. herní čas mezi dvěma přerušeními (level
 MERGE_MAX = 3               # kolik čekajících level-upů se nejvýš spojí do jedné obrazovky (B-74)
 BIG_FLASH = 0.07            # bílé bliknutí bosse/elity při zásahu (s)
 BIG_FLASH_GAP = 0.35        # …nejvýš jednou za tuto dobu → při trvalé palbě bílý max. ~20 % času (B-69)
+FROST_BONUS = 1.3           # tučňák (Ledová krev): zmražené lišky berou o 30 % víc – náhrada za zrušené klouzání
 
 @dataclass
 class RunConfig:
@@ -549,6 +550,8 @@ class Run:
             self.crits += 1
         if e.hyp_t > 0:
             dmg *= 1.25
+        if e.freeze_t > 0 and self.char.special == "frost":
+            dmg *= FROST_BONUS                  # tučňák: Ledová krev
         if e.armor > 0:
             absorbed = min(e.armor, dmg * 0.7)
             e.armor -= absorbed

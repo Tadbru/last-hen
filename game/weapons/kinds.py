@@ -460,11 +460,20 @@ class WhipWeapon(Weapon):
         p = run.player
         s = self.s
         r = self.area(s["area"])
-        if run.nearest_enemy(p.x, p.y, r + 30) is None:
+        # štípe jen to, na co opravdu dosáhne: nejbližší liška do dosahu + jejího poloměru (maximální možný dosah,
+        # stejná podmínka jako zásah níž) – dřív stačilo do dosahu + 30 px a husa často štípala do vzduchu
+        tgt, best = None, 1e18
+        for e in run.grid.query(p.x, p.y, r + 40):
+            if e.prop or not e.alive or e.alpha < 128 or e.charm_t > 0:     # jako auto-aim (Run._targetable)
+                continue
+            d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2
+            reach = r + e.r
+            if d2 <= reach * reach and d2 < best:
+                tgt, best = e, d2
+        if tgt is None:
             return False
         arc = math.radians(s["arc"])
-        dx, dy, _ = self.aim(r + 40)
-        base = math.atan2(dy, dx)
+        base = math.atan2(tgt.y - p.y, tgt.x - p.x)
         dirs = [base] + ([base + math.pi] if s.get("sides", 1) >= 2 and s["arc"] < 360 else [])
         dmg = self.dmg()
         hit = set()
